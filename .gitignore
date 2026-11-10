@@ -1,0 +1,4 @@
+# Byte-compiled / optimized files, for the whole repository tree
+__pycache__/
+*.py[cod]
+*$py.class
