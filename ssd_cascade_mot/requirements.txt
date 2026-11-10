@@ -1,5 +1,5 @@
-# Exact versions already installed in .venv (macOS arm64, Python 3.11.15).
-# A checkout does not need pip: run ./run.sh. This file is the version record.
+# Pinned versions for the Windows environment (Python 3.11).
+# Create it with setup_windows.ps1 or setup_windows.bat, then run run.ps1 or run.bat.
 contourpy==1.3.3
 cycler==0.12.1
 deep-sort-realtime==1.3.2

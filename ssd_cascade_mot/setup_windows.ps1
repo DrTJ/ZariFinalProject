@@ -1,10 +1,10 @@
-# Create a Windows virtual environment next to the vendored Mac .venv.
+# Create the Windows virtual environment from requirements.txt.
 # Requires Python 3.11 on PATH (the "py" launcher or "python").
 $ErrorActionPreference = "Stop"
 $Root = Split-Path -Parent $MyInvocation.MyCommand.Path
 Set-Location $Root
 $Venv = Join-Path $Root ".venv-windows"
-Write-Host "Creating .venv-windows from requirements.txt. The Mac .venv is left as-is."
+Write-Host "Creating .venv-windows from requirements.txt."
 if (Get-Command py -ErrorAction SilentlyContinue) {
     & py -3.11 -m venv $Venv
 } else {

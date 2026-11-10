@@ -6,26 +6,17 @@ Detection strategies:
     cascade  - SSDLite on every frame, SSD300 only when SSDLite is unsure,
                the object count changes, or a refresh keyframe is due
 
-GitHub rejects files larger than 100MB, so the torch library and the SSD300
-weights are stored as pieces under vendor/parts and joined here before import.
+GitHub rejects files larger than 100MB, so the SSD300 weights are stored as
+pieces under vendor/parts and joined here before import.
 """
 from __future__ import annotations
 
 import os
 import shutil
-import sys
 from pathlib import Path
 
 _ROOT = Path(__file__).resolve().parents[1]
 os.environ.setdefault("TORCH_HOME", str(_ROOT / "models"))
-
-
-def _mac_torch_library(root: Path) -> Path:
-    """Mac-only torch binary inside the vendored .venv. Not used on Windows."""
-    return (
-        root / ".venv" / "lib" / "python3.11" / "site-packages"
-        / "torch" / "lib" / "libtorch_cpu.dylib"
-    )
 
 
 def _ssd300_weights(root: Path) -> Path:
@@ -34,13 +25,9 @@ def _ssd300_weights(root: Path) -> Path:
 
 def _assemble_vendor_parts() -> None:
     root = _ROOT
-    jobs = [
+    jobs = (
         ("ssd300_vgg16_coco-b556d3b4.pth.part*", _ssd300_weights(root)),
-    ]
-    # The split torch library is a macOS dylib. Windows builds its own
-    # torch into .venv-windows and must not write into the Mac .venv.
-    if sys.platform == "darwin":
-        jobs.insert(0, ("libtorch_cpu.dylib.part*", _mac_torch_library(root)))
+    )
     parts_dir = root / "vendor" / "parts"
     for pattern, dest in jobs:
         parts = sorted(parts_dir.glob(pattern))

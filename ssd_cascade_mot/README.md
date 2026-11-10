@@ -21,26 +21,30 @@ Deep SORT tracking (`--track`) uses a Kalman filter, a MobileNetV2 appearance em
 
 ## Install
 
-The Python code and `requirements.txt` are shared. Each operating system has its own runtime.
+Install Python 3.11, then create the environment from this folder:
 
-- Mac (Apple Silicon): `.venv` and `python/` are already in the checkout. Run `./run.sh` or `python run.py`. Do not recreate `.venv`.
-- Windows: install Python 3.11, then run `setup_windows.ps1` or `setup_windows.bat`. That creates `.venv-windows` and does not change `.venv`. Then run `run.ps1` or `run.bat`.
+```bat
+setup_windows.bat
+```
 
-Weights in `models/` are shared. On an NVIDIA GPU, install the CUDA build of PyTorch into `.venv-windows` before the rest of `requirements.txt`. Device selection uses CUDA, then Apple MPS, then CPU.
+```powershell
+.\setup_windows.ps1
+```
+
+That creates `.venv-windows` from `requirements.txt`. Model weights are read from `models/`. On an NVIDIA GPU, install the CUDA build of PyTorch into `.venv-windows` before the rest of `requirements.txt`. Otherwise the run uses CPU.
 
 ## Run
 
 A sample pedestrian video from OpenCV is already in `data/vtest.avi`.
 
-```bash
-# Compare all three modes (detection only)
-python -m cascade_mot.run --video data/vtest.avi --classes person
+```bat
+run.bat --video data\vtest.avi --classes person
+run.bat --video data\vtest.avi --classes person --track --save-video
+```
 
-# Full system: detection + Deep SORT, with annotated videos
-python -m cascade_mot.run --video data/vtest.avi --classes person --track --save-video
-
-# With ground truth (MOTChallenge gt.txt) for MOTA / IDF1 / ID switches
-python -m cascade_mot.run --video MOT17-04.mp4 --classes person --track --gt MOT17-04/gt/gt.txt
+```powershell
+.\run.ps1 --video data/vtest.avi --classes person
+.\run.ps1 --video data/vtest.avi --classes person --track --save-video
 ```
 
 Useful flags:

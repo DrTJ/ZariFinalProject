@@ -1,7 +1,7 @@
 @echo off
 setlocal
 cd /d "%~dp0"
-echo Creating .venv-windows from requirements.txt. The Mac .venv is left as-is.
+echo Creating .venv-windows from requirements.txt.
 where py >nul 2>&1
 if %errorlevel%==0 (
   py -3.11 -m venv .venv-windows
