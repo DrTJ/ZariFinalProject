@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>مقایسهٔ SSD و YOLO</title>
+<style>
+
+@font-face {
+  font-family: "Noto Naskh Arabic";
+  src: url("fonts/NotoNaskhArabic-Regular.ttf") format("truetype");
+  font-weight: 400;
+  font-style: normal;
+}
+@font-face {
+  font-family: "Noto Naskh Arabic";
+  src: url("fonts/NotoNaskhArabic-Bold.ttf") format("truetype");
+  font-weight: 700;
+  font-style: normal;
+}
+@font-face {
+  font-family: "Noto Sans Arabic";
+  src: url("fonts/NotoSansArabic-Regular.ttf") format("truetype");
+  font-weight: 400;
+  font-style: normal;
+}
+@font-face {
+  font-family: "Noto Sans Arabic";
+  src: url("fonts/NotoSansArabic-Bold.ttf") format("truetype");
+  font-weight: 700;
+  font-style: normal;
+}
+:root {
+  --ink: #1c1915;
+  --muted: #5e584e;
+  --paper: #f3efe6;
+  --card: #fffcf7;
+  --line: #e3d8c6;
+  --teal: #0f5f59;
+  --teal-soft: #e4f3f0;
+  --indigo: #243e78;
+  --indigo-soft: #e7eef8;
+  --clay: #8a4b2f;
+  --clay-soft: #f8efe8;
+  --rose: #8d3b3b;
+  --shadow: 0 16px 40px rgba(48, 36, 18, 0.06);
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  color: var(--ink);
+  background:
+    radial-gradient(1200px 400px at 100% -10%, #efe4cf 0%, transparent 55%),
+    var(--paper);
+  font-family: "Noto Naskh Arabic", "Noto Sans Arabic", serif;
+  font-size: 18px;
+  line-height: 1.95;
+}
+a { color: var(--teal); text-underline-offset: 0.18em; }
+header.mast {
+  padding: 48px 22px 28px;
+  border-bottom: 1px solid var(--line);
+}
+.wrap { max-width: 980px; margin: 0 auto; }
+.kicker {
+  display: inline-block;
+  margin: 0 0 12px;
+  padding: 2px 10px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--clay);
+  background: var(--clay-soft);
+  font-family: "Noto Sans Arabic", sans-serif;
+  font-size: 13px;
+  letter-spacing: 0;
+}
+h1 {
+  margin: 0 0 8px;
+  font-family: "Noto Sans Arabic", sans-serif;
+  font-size: clamp(28px, 4vw, 42px);
+  line-height: 1.45;
+  font-weight: 700;
+}
+.sub { margin: 0; color: var(--muted); max-width: 46rem; }
+nav.toc {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  padding: 16px 22px;
+  position: sticky;
+  top: 0;
+  background: rgba(243, 239, 230, 0.92);
+  backdrop-filter: blur(8px);
+  border-bottom: 1px solid var(--line);
+  z-index: 2;
+  font-family: "Noto Sans Arabic", sans-serif;
+  font-size: 14px;
+}
+nav.toc a { text-decoration: none; }
+main { padding: 10px 22px 64px; }
+section {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  padding: 8px 26px 22px;
+  margin: 18px auto;
+  box-shadow: var(--shadow);
+}
+h2 {
+  font-family: "Noto Sans Arabic", sans-serif;
+  font-size: 26px;
+  margin: 18px 0 8px;
+}
+h3 {
+  font-family: "Noto Sans Arabic", sans-serif;
+  font-size: 18px;
+  margin: 22px 0 6px;
+  color: var(--indigo);
+}
+p { margin: 10px 0; }
+.lead {
+  background: var(--teal-soft);
+  border-right: 4px solid var(--teal);
+  padding: 12px 16px;
+  border-radius: 12px;
+}
+.callout {
+  background: var(--clay-soft);
+  border-right: 4px solid var(--clay);
+  padding: 12px 16px;
+  border-radius: 12px;
+}
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 12px 0 18px;
+  font-size: 15px;
+  background: white;
+}
+th, td {
+  border-bottom: 1px solid var(--line);
+  padding: 8px 10px;
+  text-align: right;
+  vertical-align: top;
+}
+th {
+  font-family: "Noto Sans Arabic", sans-serif;
+  font-weight: 700;
+  background: #faf6ef;
+  position: sticky;
+  top: 48px;
+}
+td.num, th.num {
+  direction: ltr;
+  text-align: left;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+td.best-speed { background: var(--teal-soft); color: var(--teal); font-weight: 700; }
+td.best-map { background: var(--indigo-soft); color: var(--indigo); font-weight: 700; }
+tr.failed td { color: var(--rose); background: #fbf4f4; }
+.scroll { overflow-x: auto; }
+ul { padding-inline-start: 1.2rem; }
+li { margin: 6px 0; }
+figure { margin: 12px 0 18px; }
+figcaption { color: var(--muted); font-size: 15px; }
+.legend { display: flex; gap: 16px; flex-wrap: wrap; font-family: "Noto Sans Arabic", sans-serif; font-size: 13px; }
+.swatch { width: 12px; height: 12px; display: inline-block; border-radius: 3px; margin-left: 6px; }
+footer {
+  color: var(--muted);
+  font-size: 14px;
+  padding-bottom: 40px;
+}
+.refs li { direction: ltr; text-align: left; font-family: "DejaVu Sans", sans-serif; font-size: 14px; line-height: 1.55; }
+.ids { direction: ltr; text-align: left; font-family: "DejaVu Sans", sans-serif; font-size: 13px; line-height: 1.6; }
+@media (max-width: 720px) {
+  body { font-size: 16px; }
+  section { padding: 6px 14px 16px; }
+  th { top: 0; }
+  nav.toc { position: static; }
+}
+
+</style>
+</head>
+<body>
+
+<header class="mast">
+  <div class="wrap">
+    <p class="kicker">فصل نتایج یک مقایسهٔ اندازه‌گیری‌شده</p>
+    <h1>SSDLite در برابر YOLOv8n، با ابلیشن بهینه‌سازی‌های واقعی</h1>
+    <p class="sub">عددها از اجرای همین مخزن روی یک زیرمجموعهٔ دانه‌دار از COCO val2017 آمده‌اند. خانه‌های سبز کمترین تأخیر و خانه‌های آبی بیشترین mAP را در چهار سامانهٔ اصلی نشان می‌دهند.</p>
+  </div>
+</header>
+<nav class="toc wrap"><a href="#abstract">چکیده</a><a href="#intro">مقدمه</a><a href="#related">پیشینه</a><a href="#method">روش</a><a href="#results">نتایج</a><a href="#discussion">بحث</a><a href="#limits">محدودیت‌ها</a><a href="#conclusion">نتیجه‌گیری</a><a href="#refs">مراجع</a></nav>
+<main class="wrap">
+  <section id="abstract">
+    <h2>چکیده</h2>
+    <p class="lead">میانگین تأخیر «SSDLite بهینه برای تأخیر» به اندازهٔ 34.3 میلی‌ثانیه از «YOLOv8n با ورودی 320» بیشتر است (بازهٔ ۹۵٪ تفاضل: 32.6 تا 35.9 میلی‌ثانیه؛ t = 48.78، df = 7.0، p &lt; 0.001). بازهٔ اطمینان ۹۵٪ تفاضل، صفر را در بر نمی‌گیرد.</p><p class="lead">میانگین تأخیر «SSDLite بهینه برای تأخیر» به اندازهٔ 24.1 میلی‌ثانیه از «YOLOv8n با ورودی 640» بیشتر است (بازهٔ ۹۵٪ تفاضل: 22.4 تا 25.7 میلی‌ثانیه؛ t = 34.25، df = 7.0، p &lt; 0.001). بازهٔ اطمینان ۹۵٪ تفاضل، صفر را در بر نمی‌گیرد.</p><p class="lead">میانگین تأخیر «SSDLite بهینه برای تأخیر» به اندازهٔ 18.5 میلی‌ثانیه از «SSDLite آماده در PyTorch» بیشتر است (بازهٔ ۹۵٪ تفاضل: 16.8 تا 20.2 میلی‌ثانیه؛ t = 24.74، df = 8.9، p &lt; 0.001). بازهٔ اطمینان ۹۵٪ تفاضل، صفر را در بر نمی‌گیرد.</p><p class="lead">در میان چهار سامانهٔ اصلی، کمترین میانگین تأخیر از آنِ «YOLOv8n با ورودی 320» و بیشترین mAP@[.50:.95] از آنِ «YOLOv8n با ورودی 640» است. روی همین 40 تصویر، SSDLite بهینه نسبت به YOLOv8n-320 در مجموع 1.37 ثانیه کندتر است؛ یعنی 34.3 میلی‌ثانیه به ازای هر تصویر.</p>
+    <p>سؤال این است که گونهٔ سبک SSD، ONNX Runtime، کش پیش‌پردازش، دسته‌بندی و تنظیم NMS — هر کدام جدا و سپس در پشته‌ای که از قبل تعریف شده — چه تغییری در تأخیر و mAP نسبت به YOLOv8n ایجاد می‌کنند. اگر محیط GPU یا TensorRT نداشته باشد، آن خانه خالی می‌ماند.</p>
+  </section>
+  <section id="intro">
+    <h2>۱. مقدمه</h2>
+    <p>مقایسهٔ آشکارسازها وقتی قابل خواندن است که داده، وضوح، آستانه و ناحیهٔ زمان‌سنجی یکی باشد. این فصل SSD و YOLO را روی یک فهرست ثابت از تصویرهای اعتبارسنجی COCO اجرا می‌کند. وزن‌ها همان وزن‌های عمومی آموزش‌دیده روی بخش آموزش COCO هستند و اینجا آموزش تازه‌ای انجام نمی‌شود.</p>
+    <p>پشتهٔ تأخیر، پیش از دیدن نتیجه‌ها، این‌طور تعریف شد: SSDLite-MobileNetV3، ONNX Runtime در FP32 با بهینه‌سازی گراف، کش نرمال‌سازی و تغییر اندازه، دستهٔ یک، و NMS با IoU برابر 0.45. FP16 ابلیشن جداست. دسته‌بندی سنجهٔ توان عملیاتی است و وارد حکم تأخیر نوبتی نمی‌شود.</p>
+  </section>
+  <section id="related">
+    <h2>۲. پیشینهٔ پژوهش</h2>
+    <p>Redmon و همکاران (2016) تشخیص را به یک گذر شبکه تقلیل دادند. Liu و همکاران (2016) در SSD جعبه‌های پیش‌فرض چندمقیاسی را روی نقشه‌های ویژگی گذاشتند. هر دو در برابر Faster R-CNN (Ren et al., 2015) نوشته شدند. YOLO9000 و YOLOv3 لنگر و مقیاس را به همان خانواده برگرداندند (Redmon and Farhadi, 2017, 2018). YOLOv4 و YOLOv7 این خط را با مجموعه‌ای از انتخاب‌های آموزشی ادامه دادند (Bochkovskiy et al., 2020; Wang et al., 2023).</p>
+    <p>YOLOv8 مقالهٔ همتاداوری‌شدهٔ مستقلی ندارد. Ultralytics آن را در 2023 منتشر کرد و برای YOLOv8n در ورودی 640، mAP@[.50:.95] برابر 37.3 را روی COCO val2017 گزارش می‌کند، با حدود 3.2 میلیون پارامتر و 8.7 میلیارد FLOP. کارت مدل torchvision برای SSDLite320 مقدار 21.3 را ثبت کرده است. این فاصلهٔ منتشرشده، فرض دقت را از پیش به سود YOLO می‌گذارد. فرض قابل آزمون در این سخت‌افزار، تأخیر است.</p>
+    <p>MobileNetV2 و MobileNetV3 مسیر سبک‌سازی را مشخص کرده‌اند (Sandler et al., 2018; Howard et al., 2019). Huang و همکاران (2017) هشدار داده‌اند که نام مدل بدون وضوح و ستون فقرات مقایسه را خراب می‌کند. به همین دلیل YOLO در 320 و 640 جداست. ONNX (Bai et al., 2019)، دقت مخلوط (Micikevicius et al., 2018)، کوانتیزه‌سازی صحیح (Jacob et al., 2018) و NMS (Neubeck and Van Gool, 2006; Liu et al., 2016) ابزار استقرارند، نه مجوز دست‌کاری عدد. TensorRT در همین چارچوب تعریف می‌شود و فقط در صورت اجرای واقعی وارد جدول می‌شود. Pascal VOC (Everingham et al., 2010) در این اجرا نیست.</p>
+  </section>
+  <section id="method">
+    <h2>۳. روش‌شناسی</h2>
+    <h3>۳.۱ داده</h3>
+    <p>از تصویرهای دارای جعبه در COCO val2017 یک نمونهٔ تصادفی ساده با بذر 20261020 و اندازهٔ 40 گرفته شد. تعداد جعبه‌های حقیقت 307 است. تقسیم رسمی آموزش و اعتبارسنجی COCO دست نخورده است: ارزیابی فقط روی val است.</p>
+    <h3>۳.۲ عامل‌ها</h3>
+    <p>کنترل، مسیر تجزیه‌شدهٔ SSDLite با Eager و NMS برابر 0.55 و دستهٔ ۱ است. هر ابلیشن یک عامل را عوض می‌کند. پشتهٔ بهینه ONNX Runtime، کش، و NMS برابر 0.45 را با هم دارد. YOLOv8n با IoU برابر 0.70 و همان سقف ۱۰۰ تشخیص و آستانهٔ امتیاز 0.001 اجرا شد. ناحیهٔ زمان از RGB داخل حافظه تا پایان NMS است.</p>
+    <h3>۳.۳ آمار</h3>
+    <p>پس از 2 گرم‌کردن، 8 تکرار برای سامانه‌های اصلی و 3 تکرار برای SSD300 ثبت شد. مشاهدهٔ هر تکرار، میانگین ثانیه بر تصویر روی کل زیرمجموعه است. بازهٔ ۹۵٪ با t استودنت ساخته می‌شود. mAP از pycocotools است و بازه‌اش bootstrap صدکی تصویر با 200 تکرار است. سه آزمون ولچ از پیش مشخص شده‌اند: پشتهٔ بهینه در برابر YOLOv8n-320، در برابر YOLOv8n-640، و در برابر SSDLite آماده.</p>
+    <div class="scroll"><table><tr><th>تاریخ اجرا</th><td>20 اکتبر 2026، ساعت 20:54 UTC</td></tr><tr><th>پردازنده</th><td>Intel(R) Xeon(R) Processor</td></tr><tr><th>نخ‌های محاسباتی</th><td>4</td></tr><tr><th>Python</th><td>3.12.3</td></tr><tr><th>PyTorch</th><td>2.14.1+cpu</td></tr><tr><th>Torchvision</th><td>0.29.1+cpu</td></tr><tr><th>ONNX Runtime</th><td>1.31.0 (AzureExecutionProvider, CPUExecutionProvider)</td></tr><tr><th>Ultralytics</th><td>8.4.183</td></tr><tr><th>CUDA</th><td>ناموجود</td></tr><tr><th>TensorRT</th><td>ناموجود</td></tr><tr><th>oneDNN</th><td>فعال</td></tr><tr><th>تعداد تصویر</th><td>40</td></tr><tr><th>بذر نمونه‌گیری</th><td>20261020</td></tr><tr><th>تعداد جعبهٔ حقیقت</th><td>307</td></tr><tr><th>تکرار زمان‌سنجی اصلی</th><td>8</td></tr><tr><th>تکرار SSD300</th><td>3</td></tr><tr><th>نمونه‌های bootstrap</th><td>200</td></tr><tr><th>اندازهٔ دسته در ابلیشن</th><td>8</td></tr></table></div>
+    <div class="callout"><p>CUDA: ناموجود. TensorRT: ناموجود. ModuleNotFoundError: No module named &#x27;tensorrt&#x27;</p></div>
+  </section>
+  <section id="results">
+    <h2>۴. نتایج</h2>
+    <p class="legend"><span><i class="swatch" style="background:#e4f3f0"></i>کمترین تأخیر میان چهار سامانهٔ اصلی</span><span><i class="swatch" style="background:#e7eef8"></i>بیشترین mAP میان همان چهار سامانه</span></p>
+    <div class="scroll">
+      <table>
+        <thead>
+          <tr>
+            <th>سامانه</th>
+            <th class="num">میانگین (ms)</th>
+            <th class="num">انحراف معیار</th>
+            <th class="num">بازهٔ ۹۵٪ تأخیر</th>
+            <th class="num">FPS</th>
+            <th class="num">mAP</th>
+            <th class="num">mAP@0.50</th>
+            <th class="num">بازهٔ ۹۵٪ mAP</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td>SSDLite آماده در PyTorch<div style="color:#5e584e;font-size:13px">مسیر رسمی torchvision، بدون ابلیشن</div></td><td class="num">25.4</td><td class="num">0.7</td><td class="num">24.8–26.0</td><td class="num">39.39</td><td class="num">24.40</td><td class="num">38.71</td><td class="num">19.82–31.08</td></tr><tr><td>SSDLite مسیر کنترل<div style="color:#5e584e;font-size:13px">کنترل ابلیشن: Eager، پیش‌پردازش هر بار، دستهٔ ۱، NMS برابر 0.55</div></td><td class="num">26.3</td><td class="num">0.4</td><td class="num">26.0–26.6</td><td class="num">38.02</td><td class="num">24.40</td><td class="num">38.71</td><td class="num">19.82–31.08</td></tr><tr><td>فقط پیش‌پردازش ذخیره‌شده<div style="color:#5e584e;font-size:13px">فقط کش تصویر 320 نرمال‌شده</div></td><td class="num">25.2</td><td class="num">0.2</td><td class="num">25.1–25.3</td><td class="num">39.71</td><td class="num">24.40</td><td class="num">38.71</td><td class="num">19.82–31.08</td></tr><tr><td>فقط ONNX Runtime<div style="color:#5e584e;font-size:13px">فقط زمان اجرای ONNX Runtime با بهینه‌سازی گراف</div></td><td class="num">47.9</td><td class="num">3.5</td><td class="num">45.0–50.8</td><td class="num">20.88</td><td class="num">24.40</td><td class="num">38.71</td><td class="num">19.82–31.08</td></tr><tr><td>فقط FP16<div style="color:#5e584e;font-size:13px">فقط تبدیل ONNX به FP16</div></td><td class="num">46.0</td><td class="num">4.7</td><td class="num">42.0–49.9</td><td class="num">21.75</td><td class="num">24.39</td><td class="num">38.68</td><td class="num">19.80–31.07</td></tr><tr><td>فقط bfloat16<div style="color:#5e584e;font-size:13px">فقط autocast به bfloat16 روی CPU</div></td><td class="num">29.7</td><td class="num">0.4</td><td class="num">29.4–30.0</td><td class="num">33.63</td><td class="num">24.03</td><td class="num">40.16</td><td class="num">19.64–30.43</td></tr><tr><td>فقط دسته‌بندی<div style="color:#5e584e;font-size:13px">فقط اندازهٔ دسته</div></td><td class="num">23.1</td><td class="num">0.5</td><td class="num">22.6–23.5</td><td class="num">43.36</td><td class="num">24.40</td><td class="num">38.71</td><td class="num">19.82–31.08</td></tr><tr><td>فقط تنظیم NMS<div style="color:#5e584e;font-size:13px">فقط آستانهٔ NMS برابر 0.45</div></td><td class="num">26.0</td><td class="num">1.8</td><td class="num">24.6–27.5</td><td class="num">38.40</td><td class="num">23.93</td><td class="num">39.28</td><td class="num">19.14–30.90</td></tr><tr><td>SSDLite بهینه برای تأخیر<div style="color:#5e584e;font-size:13px">ONNX Runtime و کش و NMS برابر 0.45، دستهٔ ۱</div></td><td class="num">43.9</td><td class="num">2.0</td><td class="num">42.2–45.5</td><td class="num">22.79</td><td class="num">23.93</td><td class="num">39.28</td><td class="num">19.14–30.90</td></tr><tr><td>SSDLite بهینه برای توان عملیاتی<div style="color:#5e584e;font-size:13px">همان پشته، با دسته‌بندی</div></td><td class="num">17.3</td><td class="num">0.7</td><td class="num">16.7–17.8</td><td class="num">57.87</td><td class="num">23.93</td><td class="num">39.28</td><td class="num">19.14–30.90</td></tr><tr><td>YOLOv8n با ورودی 320<div style="color:#5e584e;font-size:13px">مرجع YOLO در وضوح هم‌اندازه با SSDLite</div></td><td class="num best-speed">9.6</td><td class="num">0.1</td><td class="num">9.6–9.7</td><td class="num best-speed">103.87</td><td class="num">31.39</td><td class="num">46.55</td><td class="num">27.12–38.27</td></tr><tr><td>YOLOv8n با ورودی 640<div style="color:#5e584e;font-size:13px">مرجع YOLO در وضوح منتشرشده</div></td><td class="num">19.8</td><td class="num">0.1</td><td class="num">19.8–19.9</td><td class="num">50.43</td><td class="num best-map">39.52</td><td class="num">55.27</td><td class="num">34.58–47.05</td></tr><tr><td>SSD300-VGG16<div style="color:#5e584e;font-size:13px">گونهٔ سنگین‌تر SSD، نه یک عامل تنها</div></td><td class="num">147.8</td><td class="num">3.1</td><td class="num">140.1–155.4</td><td class="num">6.77</td><td class="num">31.39</td><td class="num">51.59</td><td class="num">28.08–38.03</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <figure><svg viewBox="0 0 860 426" width="100%" role="img" aria-label="نمودار میانگین تأخیر"><text x="272" y="28" text-anchor="end" font-size="12" font-family="Noto Sans Arabic, sans-serif">SSDLite آماده در PyTorch</text><rect x="280" y="16" width="85.9" height="16" rx="4" fill="#8a6a45"></rect><text x="371.9" y="28" font-size="11" font-family="DejaVu Sans, sans-serif">25.4</text><text x="272" y="58" text-anchor="end" font-size="12" font-family="Noto Sans Arabic, sans-serif">SSDLite مسیر کنترل</text><rect x="280" y="46" width="89.0" height="16" rx="4" fill="#8a6a45"></rect><text x="375.0" y="58" font-size="11" font-family="DejaVu Sans, sans-serif">26.3</text><text x="272" y="88" text-anchor="end" font-size="12" font-family="Noto Sans Arabic, sans-serif">فقط پیش‌پردازش ذخیره‌شده</text><rect x="280" y="76" width="85.3" height="16" rx="4" fill="#8a6a45"></rect><text x="371.3" y="88" font-size="11" font-family="DejaVu Sans, sans-serif">25.2</text><text x="272" y="118" text-anchor="end" font-size="12" font-family="Noto Sans Arabic, sans-serif">فقط ONNX Runtime</text><rect x="280" y="106" width="162.0" height="16" rx="4" fill="#8a6a45"></rect><text x="448.0" y="118" font-size="11" font-family="DejaVu Sans, sans-serif">47.9</text><text x="272" y="148" text-anchor="end" font-size="12" font-family="Noto Sans Arabic, sans-serif">فقط FP16</text><rect x="280" y="136" width="155.6" height="16" rx="4" fill="#8a6a45"></rect><text x="441.6" y="148" font-size="11" font-family="DejaVu Sans, sans-serif">46.0</text><text x="272" y="178" text-anchor="end" font-size="12" font-family="Noto Sans Arabic, sans-serif">فقط bfloat16</text><rect x="280" y="166" width="100.5" height="16" rx="4" fill="#8a6a45"></rect><text x="386.5" y="178" font-size="11" font-family="DejaVu Sans, sans-serif">29.7</text><text x="272" y="208" text-anchor="end" font-size="12" font-family="Noto Sans Arabic, sans-serif">فقط دسته‌بندی</text><rect x="280" y="196" width="78.1" height="16" rx="4" fill="#8a6a45"></rect><text x="364.1" y="208" font-size="11" font-family="DejaVu Sans, sans-serif">23.1</text><text x="272" y="238" text-anchor="end" font-size="12" font-family="Noto Sans Arabic, sans-serif">فقط تنظیم NMS</text><rect x="280" y="226" width="88.0" height="16" rx="4" fill="#8a6a45"></rect><text x="374.0" y="238" font-size="11" font-family="DejaVu Sans, sans-serif">26.0</text><text x="272" y="268" text-anchor="end" font-size="12" font-family="Noto Sans Arabic, sans-serif">SSDLite بهینه برای تأخیر</text><rect x="280" y="256" width="148.5" height="16" rx="4" fill="#8a6a45"></rect><text x="434.5" y="268" font-size="11" font-family="DejaVu Sans, sans-serif">43.9</text><text x="272" y="298" text-anchor="end" font-size="12" font-family="Noto Sans Arabic, sans-serif">SSDLite بهینه برای توان عملیاتی</text><rect x="280" y="286" width="58.5" height="16" rx="4" fill="#8a6a45"></rect><text x="344.5" y="298" font-size="11" font-family="DejaVu Sans, sans-serif">17.3</text><text x="272" y="328" text-anchor="end" font-size="12" font-family="Noto Sans Arabic, sans-serif">YOLOv8n با ورودی 320</text><rect x="280" y="316" width="32.5" height="16" rx="4" fill="#0f5f59"></rect><text x="318.5" y="328" font-size="11" font-family="DejaVu Sans, sans-serif">9.6</text><text x="272" y="358" text-anchor="end" font-size="12" font-family="Noto Sans Arabic, sans-serif">YOLOv8n با ورودی 640</text><rect x="280" y="346" width="67.0" height="16" rx="4" fill="#243e78"></rect><text x="353.0" y="358" font-size="11" font-family="DejaVu Sans, sans-serif">19.8</text><text x="272" y="388" text-anchor="end" font-size="12" font-family="Noto Sans Arabic, sans-serif">SSD300-VGG16</text><rect x="280" y="376" width="500.0" height="16" rx="4" fill="#8a6a45"></rect><text x="786.0" y="388" font-size="11" font-family="DejaVu Sans, sans-serif">147.8</text></svg><figcaption>میانگین تأخیر به میلی‌ثانیه بر تصویر. محور عددی چپ‌به‌راست است تا خواندن مقدارها با جدول یکی باشد.</figcaption></figure>
+    <p>میانگین تأخیر «SSDLite بهینه برای تأخیر» به اندازهٔ 34.3 میلی‌ثانیه از «YOLOv8n با ورودی 320» بیشتر است (بازهٔ ۹۵٪ تفاضل: 32.6 تا 35.9 میلی‌ثانیه؛ t = 48.78، df = 7.0، p &lt; 0.001). بازهٔ اطمینان ۹۵٪ تفاضل، صفر را در بر نمی‌گیرد. میانگین تأخیر «SSDLite بهینه برای تأخیر» به اندازهٔ 24.1 میلی‌ثانیه از «YOLOv8n با ورودی 640» بیشتر است (بازهٔ ۹۵٪ تفاضل: 22.4 تا 25.7 میلی‌ثانیه؛ t = 34.25، df = 7.0، p &lt; 0.001). بازهٔ اطمینان ۹۵٪ تفاضل، صفر را در بر نمی‌گیرد. میانگین تأخیر «SSDLite بهینه برای تأخیر» به اندازهٔ 18.5 میلی‌ثانیه از «SSDLite آماده در PyTorch» بیشتر است (بازهٔ ۹۵٪ تفاضل: 16.8 تا 20.2 میلی‌ثانیه؛ t = 24.74، df = 8.9، p &lt; 0.001). بازهٔ اطمینان ۹۵٪ تفاضل، صفر را در بر نمی‌گیرد. در میان چهار سامانهٔ اصلی، کمترین میانگین تأخیر از آنِ «YOLOv8n با ورودی 320» و بیشترین mAP@[.50:.95] از آنِ «YOLOv8n با ورودی 640» است. روی همین 40 تصویر، SSDLite بهینه نسبت به YOLOv8n-320 در مجموع 1.37 ثانیه کندتر است؛ یعنی 34.3 میلی‌ثانیه به ازای هر تصویر.</p>
+    <h3>ابلیشن</h3>
+    <p>کش پیش‌پردازش تأخیر را 1.1 میلی‌ثانیه کاهش داد (بازهٔ تفاضل صفر را در بر نمی‌گیرد؛ p &lt; 0.001). ONNX Runtime تأخیر را 21.6 میلی‌ثانیه افزایش داد (بازهٔ تفاضل صفر را در بر نمی‌گیرد؛ p &lt; 0.001). FP16 تأخیر را 19.7 میلی‌ثانیه افزایش داد (بازهٔ تفاضل صفر را در بر نمی‌گیرد؛ p &lt; 0.001). bfloat16 تأخیر را 3.4 میلی‌ثانیه افزایش داد (بازهٔ تفاضل صفر را در بر نمی‌گیرد؛ p &lt; 0.001). دسته‌بندی تأخیر را 3.2 میلی‌ثانیه کاهش داد (بازهٔ تفاضل صفر را در بر نمی‌گیرد؛ p &lt; 0.001). تغییر آستانهٔ NMS تأخیر را 0.3 میلی‌ثانیه کاهش داد (تفاوت از صفر قابل تمایز نیست؛ p 0.697). پشتهٔ بهینهٔ تأخیر تأخیر را 17.6 میلی‌ثانیه افزایش داد (بازهٔ تفاضل صفر را در بر نمی‌گیرد؛ p &lt; 0.001).</p>
+    <div class="scroll">
+      <table>
+        <thead><tr><th>سامانه</th><th class="num">میانهٔ تصویر (ms)</th><th class="num">صدک ۹۵</th></tr></thead>
+        <tbody><tr><td>SSDLite آماده در PyTorch</td><td class="num">24.5</td><td class="num">31.3</td></tr><tr><td>SSDLite مسیر کنترل</td><td class="num">26.3</td><td class="num">34.5</td></tr><tr><td>فقط پیش‌پردازش ذخیره‌شده</td><td class="num">24.6</td><td class="num">30.1</td></tr><tr><td>فقط ONNX Runtime</td><td class="num">44.6</td><td class="num">76.3</td></tr><tr><td>فقط FP16</td><td class="num">36.7</td><td class="num">72.6</td></tr><tr><td>فقط bfloat16</td><td class="num">29.4</td><td class="num">35.7</td></tr><tr><td>فقط دسته‌بندی</td><td class="num">سنجیده نشد</td><td class="num">سنجیده نشد</td></tr><tr><td>فقط تنظیم NMS</td><td class="num">23.7</td><td class="num">29.4</td></tr><tr><td>SSDLite بهینه برای تأخیر</td><td class="num">46.4</td><td class="num">63.8</td></tr><tr><td>SSDLite بهینه برای توان عملیاتی</td><td class="num">سنجیده نشد</td><td class="num">سنجیده نشد</td></tr><tr><td>YOLOv8n با ورودی 320</td><td class="num">9.7</td><td class="num">11.8</td></tr><tr><td>YOLOv8n با ورودی 640</td><td class="num">19.6</td><td class="num">25.0</td></tr><tr><td>SSD300-VGG16</td><td class="num">145.5</td><td class="num">171.8</td></tr></tbody>
+      </table>
+    </div>
+    <h3>دقت هر کلاس</h3>
+    <p>مقدارها AP@[.50:.95] بر حسب درصد‌اند. علامت † یعنی کمتر از ۵ جعبهٔ حقیقت.</p>
+    <div class="scroll">
+      <table>
+        <thead><tr><th>کلاس</th><th class="num">تعداد حقیقت</th><th class="num">SSDLite بهینه برای تأخیر</th><th class="num">SSDLite آماده در PyTorch</th><th class="num">YOLOv8n با ورودی 320</th><th class="num">YOLOv8n با ورودی 640</th></tr></thead>
+        <tbody><tr><td>person</td><td class="num">99</td><td class="num">20.34</td><td class="num">20.31</td><td class="num">29.47</td><td class="num">42.69</td></tr><tr><td>chair</td><td class="num">19</td><td class="num">6.05</td><td class="num">5.90</td><td class="num">11.07</td><td class="num">23.76</td></tr><tr><td>car</td><td class="num">14</td><td class="num">10.69</td><td class="num">10.69</td><td class="num">21.17</td><td class="num">36.97</td></tr><tr><td>kite</td><td class="num">14</td><td class="num">1.93</td><td class="num">1.93</td><td class="num">10.54</td><td class="num">32.55</td></tr><tr><td>elephant</td><td class="num">13</td><td class="num">31.90</td><td class="num">31.28</td><td class="num">54.45</td><td class="num">78.18</td></tr><tr><td>apple</td><td class="num">11</td><td class="num">3.00</td><td class="num">2.42</td><td class="num">11.33</td><td class="num">12.33</td></tr><tr><td>bowl</td><td class="num">8</td><td class="num">29.53</td><td class="num">28.97</td><td class="num">62.51</td><td class="num">77.82</td></tr><tr><td>banana</td><td class="num">7</td><td class="num">1.70</td><td class="num">1.11</td><td class="num">0.11</td><td class="num">14.61</td></tr><tr><td>bottle</td><td class="num">7</td><td class="num">5.83</td><td class="num">4.64</td><td class="num">40.76</td><td class="num">59.62</td></tr><tr><td>motorcycle</td><td class="num">6</td><td class="num">35.68</td><td class="num">32.85</td><td class="num">50.38</td><td class="num">33.25</td></tr><tr><td>refrigerator</td><td class="num">6</td><td class="num">57.97</td><td class="num">57.72</td><td class="num">76.61</td><td class="num">92.56</td></tr><tr><td>toilet</td><td class="num">6</td><td class="num">21.08</td><td class="num">24.40</td><td class="num">26.49</td><td class="num">41.87</td></tr><tr><td>dining table</td><td class="num">5</td><td class="num">33.63</td><td class="num">33.40</td><td class="num">32.45</td><td class="num">41.50</td></tr><tr><td>handbag</td><td class="num">5</td><td class="num">0.00</td><td class="num">0.00</td><td class="num">3.12</td><td class="num">27.83</td></tr><tr><td>potted plant</td><td class="num">5</td><td class="num">2.80</td><td class="num">2.05</td><td class="num">4.16</td><td class="num">12.03</td></tr><tr><td>sink</td><td class="num">5</td><td class="num">16.66</td><td class="num">16.41</td><td class="num">23.34</td><td class="num">30.30</td></tr><tr><td>boat †</td><td class="num">4</td><td class="num">36.37</td><td class="num">40.42</td><td class="num">50.10</td><td class="num">32.55</td></tr><tr><td>cake †</td><td class="num">4</td><td class="num">0.00</td><td class="num">0.00</td><td class="num">34.16</td><td class="num">11.64</td></tr><tr><td>horse †</td><td class="num">4</td><td class="num">25.54</td><td class="num">30.50</td><td class="num">44.93</td><td class="num">48.48</td></tr><tr><td>tennis racket †</td><td class="num">4</td><td class="num">0.22</td><td class="num">0.34</td><td class="num">2.57</td><td class="num">14.77</td></tr><tr><td>truck †</td><td class="num">4</td><td class="num">27.92</td><td class="num">27.92</td><td class="num">34.97</td><td class="num">28.02</td></tr><tr><td>backpack †</td><td class="num">3</td><td class="num">16.83</td><td class="num">16.83</td><td class="num">16.83</td><td class="num">30.30</td></tr><tr><td>bus †</td><td class="num">3</td><td class="num">79.80</td><td class="num">81.49</td><td class="num">76.44</td><td class="num">79.06</td></tr><tr><td>hot dog †</td><td class="num">3</td><td class="num">43.17</td><td class="num">43.17</td><td class="num">15.79</td><td class="num">40.10</td></tr><tr><td>remote †</td><td class="num">3</td><td class="num">3.37</td><td class="num">3.37</td><td class="num">10.10</td><td class="num">19.48</td></tr><tr><td>sandwich †</td><td class="num">3</td><td class="num">24.52</td><td class="num">32.82</td><td class="num">60.03</td><td class="num">34.81</td></tr><tr><td>teddy bear †</td><td class="num">3</td><td class="num">54.46</td><td class="num">52.87</td><td class="num">39.90</td><td class="num">48.51</td></tr><tr><td>bear †</td><td class="num">2</td><td class="num">24.16</td><td class="num">35.05</td><td class="num">58.45</td><td class="num">28.64</td></tr><tr><td>cat †</td><td class="num">2</td><td class="num">50.50</td><td class="num">50.50</td><td class="num">50.50</td><td class="num">95.05</td></tr><tr><td>cell phone †</td><td class="num">2</td><td class="num">0.00</td><td class="num">0.00</td><td class="num">7.57</td><td class="num">16.66</td></tr><tr><td>couch †</td><td class="num">2</td><td class="num">15.15</td><td class="num">15.15</td><td class="num">8.75</td><td class="num">2.24</td></tr><tr><td>fork †</td><td class="num">2</td><td class="num">0.00</td><td class="num">0.00</td><td class="num">0.00</td><td class="num">0.00</td></tr><tr><td>knife †</td><td class="num">2</td><td class="num">0.00</td><td class="num">0.00</td><td class="num">0.00</td><td class="num">0.00</td></tr><tr><td>train †</td><td class="num">2</td><td class="num">75.15</td><td class="num">75.15</td><td class="num">75.05</td><td class="num">45.45</td></tr><tr><td>tv †</td><td class="num">2</td><td class="num">30.30</td><td class="num">30.30</td><td class="num">35.35</td><td class="num">53.94</td></tr><tr><td>wine glass †</td><td class="num">2</td><td class="num">35.35</td><td class="num">35.35</td><td class="num">35.35</td><td class="num">60.20</td></tr><tr><td>zebra †</td><td class="num">2</td><td class="num">75.05</td><td class="num">75.05</td><td class="num">67.82</td><td class="num">80.20</td></tr><tr><td>bed †</td><td class="num">1</td><td class="num">90.00</td><td class="num">90.00</td><td class="num">80.00</td><td class="num">70.00</td></tr><tr><td>bench †</td><td class="num">1</td><td class="num">0.00</td><td class="num">0.00</td><td class="num">0.00</td><td class="num">0.00</td></tr><tr><td>bicycle †</td><td class="num">1</td><td class="num">0.00</td><td class="num">0.00</td><td class="num">0.00</td><td class="num">0.00</td></tr><tr><td>carrot †</td><td class="num">1</td><td class="num">0.00</td><td class="num">0.00</td><td class="num">0.00</td><td class="num">0.00</td></tr><tr><td>clock †</td><td class="num">1</td><td class="num">0.00</td><td class="num">0.00</td><td class="num">0.00</td><td class="num">90.00</td></tr><tr><td>cup †</td><td class="num">1</td><td class="num">0.00</td><td class="num">0.00</td><td class="num">1.82</td><td class="num">6.36</td></tr><tr><td>dog †</td><td class="num">1</td><td class="num">90.00</td><td class="num">90.00</td><td class="num">60.00</td><td class="num">90.00</td></tr><tr><td>frisbee †</td><td class="num">1</td><td class="num">3.33</td><td class="num">2.50</td><td class="num">50.00</td><td class="num">70.00</td></tr><tr><td>microwave †</td><td class="num">1</td><td class="num">0.00</td><td class="num">0.00</td><td class="num">100.00</td><td class="num">80.00</td></tr><tr><td>spoon †</td><td class="num">1</td><td class="num">2.00</td><td class="num">1.43</td><td class="num">6.67</td><td class="num">4.44</td></tr><tr><td>sports ball †</td><td class="num">1</td><td class="num">0.00</td><td class="num">0.00</td><td class="num">0.00</td><td class="num">0.00</td></tr><tr><td>stop sign †</td><td class="num">1</td><td class="num">50.00</td><td class="num">50.00</td><td class="num">45.00</td><td class="num">90.00</td></tr><tr><td>suitcase †</td><td class="num">1</td><td class="num">80.00</td><td class="num">80.00</td><td class="num">5.00</td><td class="num">55.00</td></tr><tr><td>umbrella †</td><td class="num">1</td><td class="num">8.33</td><td class="num">10.00</td><td class="num">70.00</td><td class="num">31.67</td></tr></tbody>
+      </table>
+    </div>
+    <h3>هم‌خوانی مسیرها</h3>
+    <p>برای تشخیص‌های مسیر رسمی SSDLite، میانگین بهترین IoU هم‌برچسب با مسیر کنترل 1.0000 بود. از 4000 جعبه، 0 جعبه جفت نشدند. این سنجش بررسی می‌کند که ابلیشن روی یک کدگشایی بیگانه ساخته نشده باشد.</p>
+  </section>
+  <section id="discussion">
+    <h2>۵. بحث</h2>
+    <p>نتیجه را باید به‌صورت یک معامله خواند، نه یک برندهٔ واحد. Huang و همکاران (2017) همین نکته را برای نسل قبلی آشکارسازها نشان داده بودند: مدل سبک‌تر می‌تواند تأخیر را کم کند و همزمان mAP را پایین بیاورد. در این زیرمجموعه mAP پشتهٔ SSD برابر 23.93 و mAP مدل YOLOv8n-640 برابر 39.52 شد. فاصلهٔ منتشرشده روی کل val2017 میان 37.3 و 21.3 است. عدد این زیرمجموعه جایگزین آن دو عدد کارت مدل نیست. اختلاف YOLOv8n در 320 و 640 اثر وضوح را از اثر نام مدل جدا می‌کند. letterbox این مدل با کشیدن مستقیم SSDLite یکی نیست؛ هر کدام پیش‌پردازش منتشرشدهٔ خود را دارند. SSD300-VGG16 با 35641826 پارامتر در برابر SSDLite با 3440060 پارامتر سنجیده شد. این ردیف سهم گونهٔ سبک را به‌صورت توصیفی نشان می‌دهد و ابلیشن تک‌عاملی نیست، چون ستون فقرات و وضوح و پیش‌فرض NMS با هم عوض می‌شوند. «فقط bfloat16» mAP را -0.37 واحد نسبت به کنترل جابه‌جا کرد. «فقط تنظیم NMS» mAP را -0.47 واحد نسبت به کنترل جابه‌جا کرد. «SSDLite بهینه برای تأخیر» mAP را -0.47 واحد نسبت به کنترل جابه‌جا کرد. «SSDLite بهینه برای توان عملیاتی» mAP را -0.47 واحد نسبت به کنترل جابه‌جا کرد. کش پیش‌پردازش تأخیر را 1.1 میلی‌ثانیه کاهش داد (بازهٔ تفاضل صفر را در بر نمی‌گیرد؛ p &lt; 0.001). ONNX Runtime تأخیر را 21.6 میلی‌ثانیه افزایش داد (بازهٔ تفاضل صفر را در بر نمی‌گیرد؛ p &lt; 0.001). FP16 تأخیر را 19.7 میلی‌ثانیه افزایش داد (بازهٔ تفاضل صفر را در بر نمی‌گیرد؛ p &lt; 0.001). bfloat16 تأخیر را 3.4 میلی‌ثانیه افزایش داد (بازهٔ تفاضل صفر را در بر نمی‌گیرد؛ p &lt; 0.001). دسته‌بندی تأخیر را 3.2 میلی‌ثانیه کاهش داد (بازهٔ تفاضل صفر را در بر نمی‌گیرد؛ p &lt; 0.001). تغییر آستانهٔ NMS تأخیر را 0.3 میلی‌ثانیه کاهش داد (تفاوت از صفر قابل تمایز نیست؛ p 0.697). پشتهٔ بهینهٔ تأخیر تأخیر را 17.6 میلی‌ثانیه افزایش داد (بازهٔ تفاضل صفر را در بر نمی‌گیرد؛ p &lt; 0.001). دستهٔ بزرگ‌تر توان عملیاتی را عوض می‌کند. اگر میانگین زمان هر تصویر در دسته پایین بیاید، این برد تأخیر نوبتی برای یک تصویر تنها نیست و در تقابل اصلی وارد نشده است.</p>
+  </section>
+  <section id="limits">
+    <h2>۶. محدودیت‌ها و تهدیدهای روایی</h2>
+    <ul>
+      <li>زیرمجموعه جایگزین COCO val2017 کامل نیست. mAP این فصل را نباید کنار 21.3 یا 37.3 کارت مدل گذاشت و برنده اعلام کرد. bootstrap فقط بازنمونه‌گیری همین تصویرهاست.</li><li>پشتیبانی کلاس‌ها نامتوازن است. AP کلاس‌هایی که جعبهٔ کمی دارند واریانس بالایی دارد و با علامت خنجر مشخص شده‌اند.</li><li>یک بذر نمونه‌گیری استفاده شد. بذر دوم اجرا نشده است.</li><li>سخت‌افزار این اجرا CPU است (Intel(R) Xeon(R) Processor). CUDA موجود نیست.</li><li>TensorRT اجرا نشد، پس سهم تبدیل موتور NVIDIA از این داده قابل برآورد نیست. جایگزین ساختگی برای آن گزارش نشده است.</li><li>اگر FP16 روی CPU به FP32 برگردد یا کندتر شود، این رفتار دستگاه است و نباید به‌عنوان شکست یا موفقیت GPU خوانده شود.</li><li>هرس ساختاری یا بدون ساختار، با تنظیم مجدد، انجام نشد. انتخاب SSDLite یک گونهٔ منتشرشده است، نه نتیجهٔ هرس همین وزن‌های VGG.</li><li>آستانهٔ امتیاز 0.001 برای پر ماندن منحنی دقت-بازخوانی است. تأخیر استقرار با آستانهٔ بالاتر می‌تواند کمتر باشد. این انتخاب برای هر دو خانواده یکسان است.</li><li>تعداد تقابل‌ها زیاد است. فقط سه تقابل تأخیر از پیش مشخص شده‌اند. p مقدارهای ابلیشن اکتشافی‌اند و برای خطای خانوادگی تصحیح نشده‌اند.</li><li>Pascal VOC اجرا نشد. تعمیم به آن مجموعه بررسی نشده است.</li><li>سربار پایتون Ultralytics و torchvision بخشی از مسیر واقعی استقرار است و از زمان گذر شبکه جدا نشده است. مقایسه، مقایسهٔ سامانه است نه فقط FLOP.</li>
+    </ul>
+  </section>
+  <section id="conclusion">
+    <h2>۷. نتیجه‌گیری</h2>
+    <p class="lead">در میان چهار سامانهٔ اصلی، کمترین میانگین تأخیر از آنِ «YOLOv8n با ورودی 320» و بیشترین mAP@[.50:.95] از آنِ «YOLOv8n با ورودی 640» است. روی همین 40 تصویر، SSDLite بهینه نسبت به YOLOv8n-320 در مجموع 1.37 ثانیه کندتر است؛ یعنی 34.3 میلی‌ثانیه به ازای هر تصویر. پشتهٔ تأخیر، که از قبل ONNX Runtime را در خود داشت، از SSDLite آماده کندتر بود. جمع‌بندی مجاز همین است: روی این CPU و این زیرمجموعه، تأخیر و mAP را باید جدا خواند. کش و دسته‌بندی اثر خود را در جدول ابلیشن دارند و دسته‌بندی سنجهٔ توان است، نه تأخیر یک تصویر تنها. هیچ‌کدام از این تغییرها دقت YOLOv8n را به SSDLite منتقل نمی‌کند. عددهایی که به GPU، TensorRT، یا کل val2017 نیاز داشتند تولید نشدند.</p>
+  </section>
+  <section id="refs">
+    <h2>مراجع</h2>
+    <p>مشخصات کتاب‌شناختی به زبان اصلی منبع آمده است.</p>
+    <ul class="refs"><li>Bai, J., Lu, F., Zhang, K., et al. (2019). ONNX: Open Neural Network Exchange. https://onnx.ai/</li><li>Bochkovskiy, A., Wang, C.-Y., &amp; Liao, H.-Y. M. (2020). YOLOv4: Optimal speed and accuracy of object detection. arXiv:2004.10934. https://arxiv.org/abs/2004.10934</li><li>Everingham, M., Van Gool, L., Williams, C. K. I., Winn, J., &amp; Zisserman, A. (2010). The Pascal visual object classes (VOC) challenge. International Journal of Computer Vision, 88(2), 303–338. https://doi.org/10.1007/s11263-009-0275-4</li><li>Howard, A., Sandler, M., Chu, G., Chen, L.-C., Chen, B., Tan, M., Wang, W., Zhu, Y., Pang, R., Vasudevan, V., Le, Q. V., &amp; Adam, H. (2019). Searching for MobileNetV3. ICCV. https://arxiv.org/abs/1905.02244</li><li>Huang, J., Rathod, V., Sun, C., Zhu, M., Korattikara, A., Fathi, A., Fischer, I., Wojna, Z., Song, Y., Guadarrama, S., &amp; Murphy, K. (2017). Speed/accuracy trade-offs for modern convolutional object detectors. CVPR. https://arxiv.org/abs/1611.10012</li><li>Jacob, B., Kligys, S., Chen, B., Zhu, M., Tang, M., Howard, A., Adam, H., &amp; Kalenichenko, D. (2018). Quantization and training of neural networks for efficient integer-arithmetic-only inference. CVPR. https://arxiv.org/abs/1712.05877</li><li>Jocher, G., Chaurasia, A., &amp; Qiu, J. (2023). Ultralytics YOLOv8 (Version 8.0.0) [Computer software]. https://github.com/ultralytics/ultralytics</li><li>Lin, T.-Y., Dollár, P., Girshick, R., He, K., Hariharan, B., &amp; Belongie, S. (2017). Feature pyramid networks for object detection. CVPR. https://arxiv.org/abs/1612.03144</li><li>Lin, T.-Y., Goyal, P., Girshick, R., He, K., &amp; Dollár, P. (2017). Focal loss for dense object detection. ICCV. https://arxiv.org/abs/1708.02002</li><li>Lin, T.-Y., Maire, M., Belongie, S., Hays, J., Perona, P., Ramanan, D., Dollár, P., &amp; Zitnick, C. L. (2014). Microsoft COCO: Common objects in context. ECCV. https://arxiv.org/abs/1405.0312</li><li>Liu, W., Anguelov, D., Erhan, D., Szegedy, C., Reed, S., Fu, C.-Y., &amp; Berg, A. C. (2016). SSD: Single shot multibox detector. ECCV. https://arxiv.org/abs/1512.02325</li><li>Micikevicius, P., Narang, S., Alben, J., Diamos, G., Elsen, E., Garcia, D., Ginsburg, B., Houston, M., Kuchaiev, O., Venkatesh, G., &amp; Wu, H. (2018). Mixed precision training. ICLR. https://arxiv.org/abs/1710.03740</li><li>Neubeck, A., &amp; Van Gool, L. (2006). Efficient non-maximum suppression. ICPR. https://doi.org/10.1109/ICPR.2006.479</li><li>NVIDIA. TensorRT. https://developer.nvidia.com/tensorrt</li><li>Redmon, J., Divvala, S., Girshick, R., &amp; Farhadi, A. (2016). You only look once: Unified, real-time object detection. CVPR. https://arxiv.org/abs/1506.02640</li><li>Redmon, J., &amp; Farhadi, A. (2017). YOLO9000: Better, faster, stronger. CVPR. https://arxiv.org/abs/1612.08242</li><li>Redmon, J., &amp; Farhadi, A. (2018). YOLOv3: An incremental improvement. arXiv:1804.02767. https://arxiv.org/abs/1804.02767</li><li>Ren, S., He, K., Girshick, R., &amp; Sun, J. (2015). Faster R-CNN: Towards real-time object detection with region proposal networks. NeurIPS. https://arxiv.org/abs/1506.01497</li><li>Sandler, M., Howard, A., Zhu, M., Zhmoginov, A., &amp; Chen, L.-C. (2018). MobileNetV2: Inverted residuals and linear bottlenecks. CVPR. https://arxiv.org/abs/1801.04381</li><li>Ultralytics. (2023). Explore Ultralytics YOLOv8. https://docs.ultralytics.com/models/yolov8/</li><li>Wang, C.-Y., Bochkovskiy, A., &amp; Liao, H.-Y. M. (2023). YOLOv7: Trainable bag-of-freebies sets new state-of-the-art for real-time object detectors. CVPR. https://arxiv.org/abs/2207.02696</li></ul>
+    <h3>پیوست. شناسهٔ تصویرها</h3>
+    <p class="ids">153527, 432898, 514914, 331817, 366141, 69356, 490470, 371042, 71756, 384651, 349837, 199681, 292005, 409268, 180296, 496597, 116362, 31817, 181542, 45550, 376625, 234607, 23751, 245915, 161609, 522638, 106048, 91619, 291619, 564091, 211674, 133000, 519039, 134096, 91921, 530975, 127270, 393014, 17178, 363784</p>
+  </section>
+  <footer>
+    <p>قلم‌ها Noto Naskh Arabic و Noto Sans Arabic هستند و تحت <a href="fonts/COPYRIGHT">SIL Open Font License 1.1</a> قرار دارند. بازتولید عددها با <span dir="ltr">python run_benchmark.py</span> و فایل <span dir="ltr">results/measurements.json</span> ممکن است.</p>
+  </footer>
+</main>
+
+</body>
+</html>
