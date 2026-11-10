@@ -13,20 +13,35 @@ from __future__ import annotations
 
 import os
 import shutil
+import sys
 from pathlib import Path
 
-os.environ.setdefault("TORCH_HOME", str(Path(__file__).resolve().parents[1] / "models"))
+_ROOT = Path(__file__).resolve().parents[1]
+os.environ.setdefault("TORCH_HOME", str(_ROOT / "models"))
+
+
+def _mac_torch_library(root: Path) -> Path:
+    """Mac-only torch binary inside the vendored .venv. Not used on Windows."""
+    return (
+        root / ".venv" / "lib" / "python3.11" / "site-packages"
+        / "torch" / "lib" / "libtorch_cpu.dylib"
+    )
+
+
+def _ssd300_weights(root: Path) -> Path:
+    return root / "models" / "hub" / "checkpoints" / "ssd300_vgg16_coco-b556d3b4.pth"
 
 
 def _assemble_vendor_parts() -> None:
-    root = Path(__file__).resolve().parents[1]
-    jobs = (
-        ("libtorch_cpu.dylib.part*",
-         root / ".venv/lib/python3.11/site-packages/torch/lib/libtorch_cpu.dylib"),
-        ("ssd300_vgg16_coco-b556d3b4.pth.part*",
-         root / "models/hub/checkpoints/ssd300_vgg16_coco-b556d3b4.pth"),
-    )
-    parts_dir = root / "vendor/parts"
+    root = _ROOT
+    jobs = [
+        ("ssd300_vgg16_coco-b556d3b4.pth.part*", _ssd300_weights(root)),
+    ]
+    # The split torch library is a macOS dylib. Windows builds its own
+    # torch into .venv-windows and must not write into the Mac .venv.
+    if sys.platform == "darwin":
+        jobs.insert(0, ("libtorch_cpu.dylib.part*", _mac_torch_library(root)))
+    parts_dir = root / "vendor" / "parts"
     for pattern, dest in jobs:
         parts = sorted(parts_dir.glob(pattern))
         if not parts:

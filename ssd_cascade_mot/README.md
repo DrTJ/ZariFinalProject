@@ -21,12 +21,12 @@ Deep SORT tracking (`--track`) uses a Kalman filter, a MobileNetV2 appearance em
 
 ## Install
 
-```bash
-python -m venv .venv && source .venv/bin/activate     # Windows: .venv\Scripts\activate
-pip install -r requirements.txt
-```
+The Python code and `requirements.txt` are shared. Each operating system has its own runtime.
 
-For an NVIDIA GPU, install the CUDA build of PyTorch from https://pytorch.org first. The pretrained COCO weights download automatically on the first run (about 14 MB for SSDLite and 136 MB for SSD300).
+- Mac (Apple Silicon): `.venv` and `python/` are already in the checkout. Run `./run.sh` or `python run.py`. Do not recreate `.venv`.
+- Windows: install Python 3.11, then run `setup_windows.ps1` or `setup_windows.bat`. That creates `.venv-windows` and does not change `.venv`. Then run `run.ps1` or `run.bat`.
+
+Weights in `models/` are shared. On an NVIDIA GPU, install the CUDA build of PyTorch into `.venv-windows` before the rest of `requirements.txt`. Device selection uses CUDA, then Apple MPS, then CPU.
 
 ## Run
 
