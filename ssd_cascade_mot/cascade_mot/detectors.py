@@ -6,8 +6,13 @@ care about torch tensors or devices.
 """
 from __future__ import annotations
 
+import os
 import time
 from dataclasses import dataclass, field
+from pathlib import Path
+
+# Weights live in <project>/models/hub/checkpoints and are read from disk.
+os.environ.setdefault("TORCH_HOME", str(Path(__file__).resolve().parents[1] / "models"))
 
 import numpy as np
 import torch

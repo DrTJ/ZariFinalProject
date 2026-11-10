@@ -156,7 +156,34 @@ class OcclusionAwareTracker(DeepSortCore):
         )
         matches = matches + matches_c
         unmatched = list(set(unmatched + unmatched_c))
+        # Two confirmed boxes on the same person: the one born first keeps the
+        # detection. Otherwise the newer ID (15) walks off with them at 7s
+        # while ID 1 coasts away.
+        matches, suppressed = self._keep_older_on_duplicate(matches, detections)
+        unmatched = list(set(unmatched + suppressed))
         return matches, unmatched, unmatched_dets
+
+    def _keep_older_on_duplicate(self, matches, detections):
+        """Drop the younger match when two tracks claim the same body."""
+        drop = set()
+        pairs = list(matches)
+        for i, (ti, di) in enumerate(pairs):
+            for tj, dj in pairs[i + 1:]:
+                if ti in drop or tj in drop:
+                    continue
+                a, b = self.tracks[ti], self.tracks[tj]
+                if not (a.is_confirmed() and b.is_confirmed()):
+                    continue
+                ca, cb = detections[di].to_xyah(), detections[dj].to_xyah()
+                height = max(float(ca[3]), float(cb[3]), 1.0)
+                dist = float(np.hypot(float(ca[0]) - float(cb[0]), float(ca[1]) - float(cb[1])))
+                if dist > 0.35 * height and _box_iou(ca, cb) < 0.4:
+                    continue
+                younger = tj if a.age >= b.age else ti
+                drop.add(younger)
+        if not drop:
+            return matches, []
+        return [(ti, di) for ti, di in matches if ti not in drop], list(drop)
 
     def _motion_gate(self, cost, tracks, dets, track_indices, detection_indices):
         cost = np.array(cost, dtype=float, copy=True)
@@ -226,6 +253,25 @@ class OcclusionAwareTracker(DeepSortCore):
                 expected = speed * missed
                 cost[row, col] = (lateral / height) + 0.15 * abs(along - expected) / height
         return cost
+
+
+def _box_iou(xyah_a, xyah_b) -> float:
+    """IoU of two boxes given as center-x, center-y, aspect, height."""
+    def to_ltrb(v):
+        cx, cy, a, h = (float(x) for x in v)
+        w = a * h
+        return cx - w / 2, cy - h / 2, cx + w / 2, cy + h / 2
+    ax1, ay1, ax2, ay2 = to_ltrb(xyah_a)
+    bx1, by1, bx2, by2 = to_ltrb(xyah_b)
+    ix1, iy1 = max(ax1, bx1), max(ay1, by1)
+    ix2, iy2 = min(ax2, bx2), min(ay2, by2)
+    iw, ih = max(0.0, ix2 - ix1), max(0.0, iy2 - iy1)
+    inter = iw * ih
+    if inter <= 0:
+        return 0.0
+    area_a = max(0.0, ax2 - ax1) * max(0.0, ay2 - ay1)
+    area_b = max(0.0, bx2 - bx1) * max(0.0, by2 - by1)
+    return inter / max(area_a + area_b - inter, 1e-6)
 
 
 def _steady(track) -> bool:

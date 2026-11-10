@@ -1,0 +1,2 @@
+mode,frames,fps,ms_per_frame,detect_ms,full_calls,full_call_rate,track_ms,unique_ids,mean_track_len,short_tracks(<10f)
+cascade,300,1.6633509202383776,601.1960481896919,128.478,280,0.9333333333333333,472.7151626232565,10,158.2,0

@@ -1,0 +1,15 @@
+[
+  "tests/test_cascade.py::test_agreement_perfect_and_partial",
+  "tests/test_cascade.py::test_bad_config_rejected",
+  "tests/test_cascade.py::test_conf_threshold_applied",
+  "tests/test_cascade.py::test_count_change_triggers_full_and_tolerance",
+  "tests/test_cascade.py::test_first_frame_uses_full",
+  "tests/test_cascade.py::test_iou_and_matching",
+  "tests/test_cascade.py::test_keyframe_refresh",
+  "tests/test_cascade.py::test_mode_agrees_with_itself_even_with_degenerate_boxes",
+  "tests/test_cascade.py::test_mot_evaluator_perfect_tracking",
+  "tests/test_cascade.py::test_output_comes_from_the_model_that_was_used",
+  "tests/test_cascade.py::test_scores_below_low_are_ignored",
+  "tests/test_cascade.py::test_stable_confident_scene_stays_on_lite",
+  "tests/test_cascade.py::test_uncertain_score_triggers_full"
+]

@@ -1,0 +1,2 @@
+ssd_cascade_mot/models/hub/checkpoints/ssd300_vgg16_coco-b556d3b4.pth filter=lfs diff=lfs merge=lfs -text
+ssd_cascade_mot/.venv/lib/python3.11/site-packages/torch/lib/libtorch_cpu.dylib filter=lfs diff=lfs merge=lfs -text
