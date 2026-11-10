@@ -1,2 +1,7 @@
 # Nothing required to run the project is ignored.
 # Python, the virtual environment, model weights, videos, and results are all in git.
+
+# Byte-compiled / optimized files
+__pycache__/
+*.py[cod]
+*$py.class
