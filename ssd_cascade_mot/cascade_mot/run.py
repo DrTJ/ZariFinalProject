@@ -215,8 +215,8 @@ def build_parser():
     # tracking
     g = p.add_argument_group("tracking")
     g.add_argument("--track", action="store_true", help="add Deep SORT tracking")
-    g.add_argument("--max-age", type=int, default=50,
-                   help="frames to keep a track while it is hidden (pole occlusion)")
+    g.add_argument("--max-age", type=int, default=120,
+                   help="frames an ID is remembered while its person is hidden or not detected")
     g.add_argument("--n-init", type=int, default=3)
     g.add_argument("--gt", default=None, help="MOTChallenge gt.txt for MOTA/IDF1 (needs --track)")
     # output
