@@ -17,7 +17,7 @@ SSD300 is called when one of these happens:
 
 On every other frame the cascade trusts SSDLite, so most frames cost only the light model.
 
-Deep SORT tracking (`--track`) uses a Kalman filter, a MobileNetV2 appearance embedding and Hungarian matching. It can be added on top of any mode.
+Deep SORT tracking (`--track`) uses a Kalman filter, a MobileNetV2 appearance embedding and Hungarian matching. It can be added on top of any mode. The matching step is the project's own (`cascade_mot/tracking.py`): every match has to pass an appearance check (embedding plus a clothing-colour histogram), and a hidden person can only come back within walking distance of where they were last seen. This keeps IDs on the right person when people pass behind the streetlight pole or each other.
 
 ## Install
 
@@ -59,6 +59,7 @@ Useful flags:
 | `--low 0.3 --high 0.6` | width of the uncertain band. A narrower band means fewer Full calls. |
 | `--count-tolerance 1` | ignore ±1 flicker in the object count |
 | `--refresh-interval 30` | force Full after N Lite-only frames (0 = off) |
+| `--max-age 120` | frames an ID is remembered while its person is hidden or not detected |
 | `--no-pretrained` | random weights, only for smoke-testing without internet |
 
 ## Output (`results/`)
@@ -99,7 +100,7 @@ The tests check the cascade decision rules and the metrics with scripted fake de
 cascade_mot/
   detectors.py   torchvision SSD300 / SSDLite wrappers (timing, class filter, FP16)
   cascade.py     FullOnly, LiteOnly, Cascade strategies + CascadeConfig
-  tracking.py    Deep SORT wrapper + track statistics
+  tracking.py    Deep SORT with appearance-first matching + track statistics
   metrics.py     agreement vs Full, MOTChallenge evaluation
   run.py         CLI benchmark, videos, CSV/JSON, chart
 tests/           unit tests

@@ -1,23 +1,30 @@
 """Deep SORT tracking on top of any detection strategy.
 
-Uses the `deep-sort-realtime` package: a Kalman filter predicts each track's
-motion, and a MobileNetV2 appearance embedding plus the Hungarian algorithm
-associates new detections with existing tracks (the same building blocks
-described in the thesis).
+Uses the `deep-sort-realtime` package for the Kalman filter, the track
+life-cycle and the MobileNetV2 appearance embedding. The step that decides
+which detection belongs to which track is replaced, because the stock one
+swaps IDs around the streetlight pole and its sign in data/vtest.avi.
 
-Occlusion handling is tuned for a pedestrian walking behind a thin occluder
-(the streetlight pole in data/vtest.avi). The stock defaults handed that
-walker's ID to a person standing near the pole, then gave the walker a new ID
-when they came out the other side. Two things caused it:
+What goes wrong there, and what this module does about it:
 
-* The Mahalanobis gate uses box height and aspect. The pole clips both, so the
-  real detection is rejected and the track is free to attach to someone else.
-* IoU association runs for every track missed for exactly one frame, with a
-  loose 0.7 cost (IoU only needs to be 0.3). The person circling by the pole
-  is close enough to win that fallback.
-
-A confirmed track with a steady velocity now stays on its predicted path.
-If the walker is hidden, the track coasts instead of adopting a neighbor.
+* Two people at the sign are closer than a body width, so position cannot
+  tell them apart. Every match therefore has to pass an appearance check.
+  The stock threshold (cosine 0.2-0.3) does not do that: two different people
+  in this video are on average only 0.21 apart, the same person 0.10.
+* The embedding alone is weak for 80 px pedestrians in dark clothes. A small
+  clothing-colour histogram (torso + legs) is added to it. With both, the
+  right person is the closest one in 97% of re-appearances (86% without).
+* A box that covers two people, or a person half hidden by the sign, would
+  teach a track the wrong appearance. Samples are only stored from boxes
+  that stand clear of every other box and of every hidden track.
+* A hidden person can only come back where they could have walked to. The
+  search radius grows with walking speed and is capped.
+* A person who was missed gets a provisional track. Before that track becomes
+  a new ID, it is compared over several frames with the IDs that are
+  currently hidden nearby, and handed back to the matching one.
+* Someone walking in at the border of the picture is a new person, unless a
+  hidden track was last seen at that border or was walking towards it. A
+  track that walked out of the picture is dropped after a few frames.
 """
 from __future__ import annotations
 
@@ -25,37 +32,56 @@ import time
 from collections import defaultdict
 from dataclasses import dataclass
 
+import cv2
 import numpy as np
-from deep_sort_realtime.deep_sort import iou_matching, linear_assignment
-from deep_sort_realtime.deep_sort.track import Track
+from deep_sort_realtime.deep_sort.track import Track, TrackState
 from deep_sort_realtime.deep_sort.tracker import Tracker as DeepSortCore
 from deep_sort_realtime.deepsort_tracker import DeepSort
+from scipy.optimize import linear_sum_assignment
 
 from .detectors import Detections
 
 
-# Stock deep-sort-realtime values this project used before the occlusion fix.
+# Stock deep-sort-realtime values this project started from.
 DEFAULTS_BEFORE = dict(max_age=30, n_init=3, max_iou_distance=0.7,
                        max_cosine_distance=0.2, gating_only_position=False)
 
-# Values used after the fix. max_iou_distance is 1 - IoU, so 0.4 means the
-# box must still overlap by at least 0.6. Cosine is slightly looser so a
-# walker whose crop was partly the pole can still match their own gallery.
-MAX_AGE = 50
-N_INIT = 3
-MAX_IOU_DISTANCE = 0.4
-MAX_COSINE_DISTANCE = 0.3
-NN_BUDGET = 100
+MAX_AGE = 120               # frames a hidden track is remembered (12 s at 10 fps)
+N_INIT = 3                  # detections needed before a track gets an ID
+NN_BUDGET = 100             # appearance samples kept per track
+TENTATIVE_GRACE = 2         # missed frames a not-yet-confirmed track survives
+PROBATION_HITS = 10         # detections needed instead of N_INIT while a hidden ID is nearby
+EDGE_GRACE = 5              # frames before a track that walked out of the picture is dropped
+ENTRY_H = 0.35              # a box this close to the picture border is someone walking in
+HEADING_H = 0.04            # per-frame speed towards a spot that counts as "was walking there"
 
-# Motion gate. Distances are fractions of the track's box height.
-MOTION_SPEED = 1.5          # px/frame; slower tracks (a person circling) are not corridor-gated
-NEAR_RADIUS_H = 0.75        # seen last frame: detection must sit near the prediction
-COAST_RADIUS_STEP_H = 0.12  # extra radius per missed frame, while the pole hides the walker
-COAST_RADIUS_CAP_H = 2.0
-LATERAL_H = 0.45            # max sideways offset from the velocity heading
-LATERAL_STEP_H = 0.06
-BACK_H = 0.5                # reject a match that steps backwards against the heading
-OCCLUDED_HEIGHT_RATIO = 0.65  # shorter than this vs the predicted box => pole clipped the crop
+# Appearance. Distance = (1 - cosine of embeddings) + COLOR_WEIGHT * (1 -
+# overlap of colour histograms). 0 means identical.
+COLOR_WEIGHT = 0.5
+COLOR_BINS = (4, 6, 6)      # L, a, b bins per body part
+APP_NEAR = 0.32             # limit while the track was seen in the previous frame
+APP_LOST = 0.26             # limit when the track comes back after a gap
+APP_HANDBACK = 0.27         # limit (median over several frames) for handing a new track back
+APP_LEARN = 0.25            # a box further than this from the gallery is not stored as a sample
+APP_MARGIN = 0.03           # a hidden track must beat every other candidate by this much
+
+# Geometry. Distances are fractions of the person's box height.
+NEAR_H = 0.5                # seen last frame: next box must be this close
+WALK_H = 0.11               # fastest walk in this scene, per frame
+SLACK_H = 0.5               # box jitter allowance on top of the walk
+REACH_CAP_H = 2.5           # a hidden track is never re-attached further away than this
+POS_WEIGHT = 0.2            # how much position counts next to appearance
+MIN_HEIGHT_RATIO = 0.45     # box much shorter/taller than the track => not this person
+MAX_HEIGHT_RATIO = 1.8
+
+# Appearance samples are only taken from clean boxes.
+CLEAN_IOU = 0.05            # overlap with another box or hidden track that spoils a sample
+DUPLICATE_IOU = 0.4         # a new box overlapping an owned box this much is the same person
+DUPLICATE_COVER = 0.5       # ... and so is a new box with this share of it inside owned boxes
+HIDDEN_AGE = 15             # a hidden track guards its place for this many frames
+OCCLUDED_HEIGHT_RATIO = 0.65  # box this much shorter than before => clipped by the pole
+
+_INF = 1e5
 
 
 @dataclass
@@ -65,234 +91,333 @@ class TrackOut:
     label: int | None
 
 
-class OcclusionTrack(Track):
-    """Same as Deep SORT's track, but do not learn appearance from a clipped box.
+def color_descriptor(frame_bgr: np.ndarray, ltwh) -> np.ndarray:
+    """Clothing colours of the torso and the legs as a unit-length vector.
 
-    A crop that is mostly the pole (or the sign on it) pulls the gallery toward
-    whoever happens to be standing there. Keeping the pre-occlusion feature
-    lets the walker match themselves on the way out.
+    Only the middle half of the box is read, so road and grass next to the
+    person stay out of it.
     """
+    x, y, w, h = (float(v) for v in ltwh)
+    fh, fw = frame_bgr.shape[:2]
+    xa = int(np.clip(round(x + 0.25 * w), 0, fw - 1))
+    xb = int(np.clip(round(x + 0.75 * w), xa + 1, fw))
+    parts = []
+    for top, bottom in ((0.15, 0.50), (0.55, 0.92)):
+        ya = int(np.clip(round(y + top * h), 0, fh - 1))
+        yb = int(np.clip(round(y + bottom * h), ya + 1, fh))
+        lab = cv2.cvtColor(np.ascontiguousarray(frame_bgr[ya:yb, xa:xb]), cv2.COLOR_BGR2LAB)
+        hist = cv2.calcHist([lab], [0, 1, 2], None, list(COLOR_BINS),
+                            [0, 256, 96, 160, 96, 160]).ravel()
+        parts.append(np.sqrt(hist / max(float(hist.sum()), 1.0)))
+    vec = np.concatenate(parts)
+    return vec / (float(np.linalg.norm(vec)) + 1e-9)
 
-    def update(self, kf, detection):
-        prev_h = float(self.mean[3])
+
+def appearance_feature(embed, color) -> np.ndarray:
+    """Embedding and colours in one vector, so one dot product gives the distance."""
+    embed = np.asarray(embed, dtype=np.float32)
+    embed = embed / (float(np.linalg.norm(embed)) + 1e-9)
+    return np.concatenate([embed, np.sqrt(COLOR_WEIGHT) * np.asarray(color, dtype=np.float32)])
+
+
+def _ltwh_overlap(a, b) -> float:
+    """Shared area of two boxes in pixels."""
+    iw = min(a[0] + a[2], b[0] + b[2]) - max(a[0], b[0])
+    ih = min(a[1] + a[3], b[1] + b[3]) - max(a[1], b[1])
+    return float(iw * ih) if iw > 0 and ih > 0 else 0.0
+
+
+def _ltwh_iou(a, b) -> float:
+    inter = _ltwh_overlap(a, b)
+    return float(inter / (a[2] * a[3] + b[2] * b[3] - inter)) if inter > 0 else 0.0
+
+
+class OcclusionTrack(Track):
+    """Deep SORT track that keeps its own clean appearance gallery."""
+
+    def __init__(self, mean, covariance, track_id, n_init, max_age, feature=None, **kwargs):
+        super().__init__(mean, covariance, track_id, n_init, max_age, feature=feature, **kwargs)
+        self.gallery = [np.asarray(feature, dtype=np.float32)]
+        self.recent = [self.gallery[0]]     # last few samples, clean or not
+        self.entered = False                # first seen at the border of the picture
+        self.last_center = (float(mean[0]), float(mean[1]))
+        self.first_center = self.last_center
+        self.last_height = float(mean[3])
+        ltwh = kwargs.get("original_ltwh")
+        if ltwh is None:
+            width = float(mean[2]) * float(mean[3])
+            ltwh = (mean[0] - width / 2, mean[1] - mean[3] / 2, width, mean[3])
+        self.last_ltwh = tuple(float(v) for v in ltwh)
+
+    def appearance_distance(self, features: np.ndarray) -> np.ndarray:
+        """Distance from each feature row to the closest stored sample."""
+        sims = np.asarray(features) @ np.asarray(self.gallery).T
+        return (1.0 + COLOR_WEIGHT) - sims.max(axis=1)
+
+    def update(self, kf, detection, clean: bool = True):
         xyah = detection.to_xyah()
-        det_h = float(xyah[3])
+        clipped = float(xyah[3]) < OCCLUDED_HEIGHT_RATIO * self.last_height
+        feature = np.asarray(detection.feature, dtype=np.float32)
+        # A crop that suddenly looks different is usually two people in one
+        # box, or the sign in front of the person. Do not learn from it.
+        # A provisional track is exempt: its first view is often half a
+        # person stepping into the picture, and it has nothing else yet.
+        if self.is_confirmed():
+            clean = clean and float(self.appearance_distance(feature[None])[0]) <= APP_LEARN
         super().update(kf, detection)
-        # Where the person was last actually seen. The Kalman mean runs ahead
-        # during a detection gap and would otherwise miss them on the way back.
-        self._last_center = (float(xyah[0]), float(xyah[1]))
-        clipped = prev_h > 1.0 and det_h < OCCLUDED_HEIGHT_RATIO * prev_h
-        if clipped and len(self.features) > 1:
-            self.features.pop()
+        self.features = [feature]           # the library only needs the latest one
+        self.recent = (self.recent + [feature])[-N_INIT:]
+        self.last_center = (float(xyah[0]), float(xyah[1]))
+        self.last_ltwh = tuple(float(v) for v in detection.get_ltwh())
+        if clean and not clipped:
+            self.gallery = (self.gallery + [feature])[-NN_BUDGET:]
+        if not clipped:
+            self.last_height = float(xyah[3])
+
+    def mark_missed(self):
+        if self.state == TrackState.Tentative:
+            if self.time_since_update > TENTATIVE_GRACE:
+                self.state = TrackState.Deleted
+        elif self.time_since_update > self._max_age:
+            self.state = TrackState.Deleted
+
+    def reach(self) -> float:
+        """How far (in box heights) this person can be from where they were last seen."""
+        return min(REACH_CAP_H, SLACK_H + WALK_H * self.time_since_update)
 
 
 class OcclusionAwareTracker(DeepSortCore):
-    """Deep SORT association with a path gate for steady walkers."""
+    """Deep SORT bookkeeping with appearance-first association."""
 
-    def __init__(self, metric, max_iou_distance: float, max_age: int, n_init: int):
-        super().__init__(
-            metric,
-            max_iou_distance=max_iou_distance,
-            max_age=max_age,
-            n_init=n_init,
-            override_track_class=OcclusionTrack,
-            gating_only_position=True,
-        )
+    def __init__(self, metric, max_age: int, n_init: int):
+        super().__init__(metric, max_age=max_age, n_init=n_init,
+                         override_track_class=OcclusionTrack)
+        self.frame_size: tuple[int, int] | None = None   # (width, height), set by Tracker
+
+    def update(self, detections, today=None):
+        matches, unmatched_tracks, unmatched_dets = self._match(detections)
+        matches, unmatched_tracks = self._hand_back(matches, unmatched_tracks, detections)
+
+        # A second box on a person who already has an ID (the detector does
+        # this for two people standing together) must not grow into a new ID.
+        owned = [detections[di].get_ltwh() for ti, di in matches if self.tracks[ti].is_confirmed()]
+
+        def duplicate(di):
+            box = detections[di].get_ltwh()
+            if any(_ltwh_iou(box, o) > DUPLICATE_IOU for o in owned):
+                return True
+            # A box drawn across two neighbours overlaps neither of them
+            # much, but most of it lies inside their boxes.
+            return sum(_ltwh_overlap(box, o) for o in owned) > DUPLICATE_COVER * box[2] * box[3]
+
+        dropped = [(ti, di) for ti, di in matches
+                   if not self.tracks[ti].is_confirmed() and duplicate(di)]
+        matches = [m for m in matches if m not in dropped]
+        unmatched_tracks = unmatched_tracks + [ti for ti, _ in dropped]
+        unmatched_dets = [di for di in unmatched_dets if not duplicate(di)]
+
+        matched_tracks = {ti for ti, _ in matches}
+        for ti, di in matches:
+            clean = self._is_clean(ti, di, detections, matched_tracks)
+            self.tracks[ti].update(self.kf, detections[di], clean=clean)
+        for ti in unmatched_tracks:
+            track = self.tracks[ti]
+            track.mark_missed()
+            if track.time_since_update > EDGE_GRACE and self._left_the_picture(track):
+                track.state = TrackState.Deleted
+        for di in unmatched_dets:
+            self._initiate_track(detections[di])
+            box = detections[di].get_ltwh()
+            self.tracks[-1].entered = self._border_gap(box) < ENTRY_H * box[3]
+            self.tracks[-1].first_center = self.tracks[-1].last_center
+
+        self.del_tracks_ids = [t.track_id for t in self.tracks if t.is_deleted()]
+        self.tracks = [t for t in self.tracks if not t.is_deleted()]
 
     def _match(self, detections):
-        def gated_metric(tracks, dets, track_indices, detection_indices):
-            features = np.array([dets[i].feature for i in detection_indices])
-            targets = np.array([tracks[i].track_id for i in track_indices])
-            cost = self.metric.distance(features, targets)
-            cost = linear_assignment.gate_cost_matrix(
-                self.kf, cost, tracks, dets, track_indices, detection_indices,
-                only_position=True,
-            )
-            return self._motion_gate(cost, tracks, dets, track_indices, detection_indices)
+        n_tracks, n_dets = len(self.tracks), len(detections)
+        if n_tracks == 0 or n_dets == 0:
+            return [], list(range(n_tracks)), list(range(n_dets))
 
-        confirmed = [i for i, t in enumerate(self.tracks) if t.is_confirmed()]
-        unconfirmed = [i for i, t in enumerate(self.tracks) if not t.is_confirmed()]
+        xyah = np.array([d.to_xyah() for d in detections], dtype=float)
+        centers, heights = xyah[:, :2], xyah[:, 3]
+        feats = np.array([d.feature for d in detections], dtype=np.float32)
+        # Boxes at the border of the picture are people walking in. A hidden
+        # track may only claim one if it was last seen at the border itself
+        # or was walking towards that spot.
+        entering = np.array([self._border_gap(d.get_ltwh()) < ENTRY_H * h
+                             for d, h in zip(detections, heights)])
 
-        matches_a, unmatched_a, unmatched_dets = linear_assignment.matching_cascade(
-            gated_metric, self.metric.matching_threshold, self.max_age,
-            self.tracks, detections, confirmed,
-        )
-
-        # IoU fallback is what stuck the walker's ID on the person by the pole:
-        # appearance had rejected the clipped crop, then any nearby box with
-        # IoU >= 0.3 was accepted. A track that already has a steady heading
-        # coasts through that gap instead.
-        iou_candidates = list(unconfirmed)
-        for k in unmatched_a:
-            if self.tracks[k].time_since_update != 1:
-                continue
-            if _steady(self.tracks[k]):
-                continue
-            iou_candidates.append(k)
-        unmatched_a = [k for k in unmatched_a if k not in iou_candidates]
-
-        def gated_iou(tracks, dets, track_indices, detection_indices):
-            cost = iou_matching.iou_cost(tracks, dets, track_indices, detection_indices)
-            return self._motion_gate(cost, tracks, dets, track_indices, detection_indices)
-
-        matches_b, unmatched_b, unmatched_dets = linear_assignment.min_cost_matching(
-            gated_iou, self.max_iou_distance, self.tracks, detections,
-            iou_candidates, unmatched_dets,
-        )
-        matches = matches_a + matches_b
-        unmatched = list(set(unmatched_a + unmatched_b))
-
-        # A walker lost for more than one frame (the lite model dropped every
-        # box, or the pole hid them) is still near the last measured center,
-        # while the Kalman mean has kept moving. Match that detection back
-        # before a new ID is born on the same person.
-        coasting = [
-            k for k in unmatched
-            if self.tracks[k].is_confirmed() and self.tracks[k].time_since_update > 1
-        ]
-        unmatched = [k for k in unmatched if k not in coasting]
-        matches_c, unmatched_c, unmatched_dets = linear_assignment.min_cost_matching(
-            self._reacquire_cost, 5.0, self.tracks, detections, coasting, unmatched_dets,
-        )
-        matches = matches + matches_c
-        unmatched = list(set(unmatched + unmatched_c))
-        # Two confirmed boxes on the same person: the one born first keeps the
-        # detection. Otherwise the newer ID (15) walks off with them at 7s
-        # while ID 1 coasts away.
-        matches, suppressed = self._keep_older_on_duplicate(matches, detections)
-        unmatched = list(set(unmatched + suppressed))
-        return matches, unmatched, unmatched_dets
-
-    def _keep_older_on_duplicate(self, matches, detections):
-        """Drop the younger match when two tracks claim the same body."""
-        drop = set()
-        pairs = list(matches)
-        for i, (ti, di) in enumerate(pairs):
-            for tj, dj in pairs[i + 1:]:
-                if ti in drop or tj in drop:
-                    continue
-                a, b = self.tracks[ti], self.tracks[tj]
-                if not (a.is_confirmed() and b.is_confirmed()):
-                    continue
-                ca, cb = detections[di].to_xyah(), detections[dj].to_xyah()
-                height = max(float(ca[3]), float(cb[3]), 1.0)
-                dist = float(np.hypot(float(ca[0]) - float(cb[0]), float(ca[1]) - float(cb[1])))
-                if dist > 0.35 * height and _box_iou(ca, cb) < 0.4:
-                    continue
-                younger = tj if a.age >= b.age else ti
-                drop.add(younger)
-        if not drop:
-            return matches, []
-        return [(ti, di) for ti, di in matches if ti not in drop], list(drop)
-
-    def _motion_gate(self, cost, tracks, dets, track_indices, detection_indices):
-        cost = np.array(cost, dtype=float, copy=True)
-        for row, ti in enumerate(track_indices):
-            track = tracks[ti]
-            if not _steady(track):
-                continue
-            px, py = float(track.mean[0]), float(track.mean[1])
-            height = max(float(track.mean[3]), 1.0)
-            vx, vy = float(track.mean[4]), float(track.mean[5])
-            speed = float(np.hypot(vx, vy))
-            missed = max(int(track.time_since_update) - 1, 0)
-            # Just-seen tracks stay on a tight gate around the prediction.
-            # Longer gaps use the last real center, so a person the filter
-            # ran ahead of can still be recovered.
-            if track.time_since_update > 1 and getattr(track, "_last_center", None):
-                px, py = track._last_center
-                lat_lim = 0.75 * height
-                back_lim = 0.45 * height
-                ahead_lim = speed * track.time_since_update + 0.4 * height
+        cost = np.full((n_tracks, n_dets), _INF)
+        app = np.full((n_tracks, n_dets), _INF)
+        in_reach = np.zeros((n_tracks, n_dets), dtype=bool)
+        for ti, track in enumerate(self.tracks):
+            h = max(track.last_height, 1.0)
+            d_last = np.linalg.norm(centers - np.array(track.last_center), axis=1) / h
+            d_pred = np.linalg.norm(centers - track.mean[:2], axis=1) / h
+            pos = np.minimum(d_last, d_pred)
+            ratio = heights / h
+            size_ok = (ratio > MIN_HEIGHT_RATIO) & (ratio < MAX_HEIGHT_RATIO)
+            app[ti] = track.appearance_distance(feats)
+            if track.time_since_update <= 1:
+                in_reach[ti] = (pos <= NEAR_H) & size_ok
+                ok = in_reach[ti] & (app[ti] <= APP_NEAR)
             else:
-                radius = min(COAST_RADIUS_CAP_H, NEAR_RADIUS_H + COAST_RADIUS_STEP_H * missed) * height
-                lat_lim = (LATERAL_H + LATERAL_STEP_H * missed) * height
-                back_lim = BACK_H * height
-                ahead_lim = radius
-            ux, uy = vx / speed, vy / speed
-            for col, di in enumerate(detection_indices):
-                det = dets[di].to_xyah()
-                dx = float(det[0]) - px
-                dy = float(det[1]) - py
-                lateral = abs(dx * -uy + dy * ux)
-                along = dx * ux + dy * uy
-                if lateral > lat_lim or along < -back_lim or along > ahead_lim:
-                    cost[row, col] = linear_assignment.INFTY_COST
-        return cost
+                in_reach[ti] = (d_last <= track.reach()) & size_ok
+                in_reach[ti] &= ~entering | self._could_be_at_border(track, centers)
+                # A box that fails here can still be handed back over
+                # several frames.
+                ok = in_reach[ti] & (app[ti] <= APP_LOST)
+            cost[ti, ok] = app[ti, ok] + POS_WEIGHT * np.minimum(pos[ok], NEAR_H)
 
-    def _reacquire_cost(self, tracks, dets, track_indices, detection_indices):
-        """Cost of giving a coasting track its own lost detection back.
+        # A track that comes back after a gap has only its looks to go on. If
+        # another hidden track that could also be standing there looks about
+        # as similar, do not guess; _hand_back decides over several frames.
+        confirmed = [ti for ti, t in enumerate(self.tracks) if t.is_confirmed()]
+        hidden = [ti for ti in confirmed if self.tracks[ti].time_since_update > 1]
+        for ti in hidden:
+            for di in np.flatnonzero(cost[ti] < _INF):
+                rivals = [app[tj, di] for tj in hidden if tj != ti and in_reach[tj, di]]
+                if rivals and min(rivals) < app[ti, di] + APP_MARGIN:
+                    cost[ti, di] = _INF
 
-        Anything outside the corridor is left at an infinite cost. Inside it,
-        a box on the walking line beats a box that has stepped toward the pole.
+        # People who already have an ID choose first. Provisional tracks only
+        # get the boxes nobody claimed, so they cannot take over a person.
+        provisional = [ti for ti in range(n_tracks) if not self.tracks[ti].is_confirmed()]
+        matches = _assign(cost, confirmed, list(range(n_dets)))
+        taken = {di for _, di in matches}
+        matches += _assign(cost, provisional, [di for di in range(n_dets) if di not in taken])
+        matched_t = {ti for ti, _ in matches}
+        matched_d = {di for _, di in matches}
+        unmatched_tracks = [i for i in range(n_tracks) if i not in matched_t]
+        unmatched_dets = [i for i in range(n_dets) if i not in matched_d]
+        return matches, unmatched_tracks, unmatched_dets
+
+    def _hand_back(self, matches, unmatched_tracks, detections):
+        """Give a provisional track back to a hidden ID instead of creating a new one.
+
+        Runs once the provisional track has N_INIT views of the person, which
+        is steadier evidence than the single box the hidden track was offered
+        when the person came back. While a hidden ID is within walking
+        distance and looks have not settled it, the provisional track stays
+        on probation: it needs PROBATION_HITS detections to become a new ID.
         """
-        cost = np.full((len(track_indices), len(detection_indices)), linear_assignment.INFTY_COST)
-        for row, ti in enumerate(track_indices):
-            track = tracks[ti]
-            last = getattr(track, "_last_center", None)
-            if last is None:
+        hidden = [ti for ti in unmatched_tracks
+                  if self.tracks[ti].is_confirmed() and self.tracks[ti].time_since_update > 1]
+        out = []
+        for ti, di in matches:
+            new = self.tracks[ti]
+            if not new.is_tentative() or new.hits + 1 < self.n_init:
+                out.append((ti, di))
                 continue
-            lx, ly = last
-            height = max(float(track.mean[3]), 1.0)
-            vx, vy = float(track.mean[4]), float(track.mean[5])
-            speed = float(np.hypot(vx, vy))
-            if speed < 1e-3:
+            det = detections[di]
+            xyah = det.to_xyah()
+            nearby = []
+            for tj in hidden:
+                old = self.tracks[tj]
+                h = max(old.last_height, 1.0)
+                dist = float(np.hypot(xyah[0] - old.last_center[0], xyah[1] - old.last_center[1])) / h
+                if dist > old.reach() or not MIN_HEIGHT_RATIO < float(xyah[3]) / h < MAX_HEIGHT_RATIO:
+                    continue
+                # The new track walked in from the border; this hidden one
+                # was well inside the picture and not heading there.
+                if new.entered and not self._could_be_at_border(old, np.array([new.first_center]))[0]:
+                    continue
+                nearby.append(tj)
+            if not nearby:
+                new._n_init = self.n_init
+                out.append((ti, di))
                 continue
-            ux, uy = vx / speed, vy / speed
-            missed = int(track.time_since_update)
-            for col, di in enumerate(detection_indices):
-                det = dets[di].to_xyah()
-                rx = float(det[0]) - lx
-                ry = float(det[1]) - ly
-                along = rx * ux + ry * uy
-                lateral = abs(rx * -uy + ry * ux)
-                if along < -0.45 * height or along > speed * missed + 0.4 * height:
-                    continue
-                if lateral > 0.75 * height:
-                    continue
-                expected = speed * missed
-                cost[row, col] = (lateral / height) + 0.15 * abs(along - expected) / height
-        return cost
+            samples = np.array(new.recent[-(self.n_init - 1):] + [det.feature], dtype=np.float32)
+            scores = {tj: float(np.median(self.tracks[tj].appearance_distance(samples)))
+                      for tj in nearby}
+            best = min(nearby, key=lambda tj: scores[tj])
+            # Nobody appears out of thin air in the middle of the picture. If
+            # probation is over and the person did not walk in at the border,
+            # they are one of the hidden IDs, so a looser match is enough.
+            last_chance = new.hits + 1 >= PROBATION_HITS and not new.entered
+            limit = APP_NEAR if last_chance else APP_HANDBACK
+            # Two hidden people who both look like this one: wait.
+            settled = scores[best] <= limit and all(
+                scores[tj] >= scores[best] + APP_MARGIN for tj in nearby if tj != best)
+            if not settled:
+                new._n_init = PROBATION_HITS
+                out.append((ti, di))
+                continue
+            old = self.tracks[best]
+            old.mean, old.covariance = new.mean.copy(), new.covariance.copy()
+            new.state = TrackState.Deleted
+            hidden.remove(best)
+            unmatched_tracks = [k for k in unmatched_tracks if k != best]
+            out.append((best, di))
+        return out, unmatched_tracks
+
+    def _border_gap(self, ltwh) -> float:
+        """Pixels between a box and the nearest border of the picture."""
+        if self.frame_size is None:
+            return float("inf")
+        width, height = self.frame_size
+        x, y, w, h = ltwh
+        return float(min(x, y, width - (x + w), height - (y + h)))
+
+    def _could_be_at_border(self, track, centers) -> np.ndarray:
+        """Per position: may this hidden track be the person seen there at the border?
+
+        Yes if it was last seen at the border itself, or was walking towards
+        that position when it disappeared. A person standing in the middle of
+        the picture does not turn up at the edge a second later.
+        """
+        h = max(track.last_height, 1.0)
+        if self._border_gap(track.last_ltwh) <= h:
+            return np.ones(len(centers), dtype=bool)
+        step = np.asarray(centers, dtype=float) - np.array(track.last_center)
+        dist = np.linalg.norm(step, axis=1) + 1e-9
+        towards = (step @ np.asarray(track.mean[4:6], dtype=float)) / dist
+        return towards >= HEADING_H * h
+
+    def _left_the_picture(self, track) -> bool:
+        """True when the track was last seen at the border, walking outwards."""
+        if self.frame_size is None:
+            return False
+        width, height = self.frame_size
+        x, y = track.last_center
+        vx, vy = float(track.mean[4]), float(track.mean[5])
+        margin = 0.6 * track.last_height
+        return ((x < margin and vx < 0) or (x > width - margin and vx > 0)
+                or (y < margin and vy < 0) or (y > height - margin and vy > 0))
+
+    def _is_clean(self, ti, di, detections, matched_tracks) -> bool:
+        """True when the box shows one person and nothing else."""
+        box = detections[di].get_ltwh()
+        for dj, other in enumerate(detections):
+            if dj != di and _ltwh_iou(box, other.get_ltwh()) > CLEAN_IOU:
+                return False
+        for tj, other in enumerate(self.tracks):
+            if tj == ti or tj in matched_tracks or not other.is_confirmed():
+                continue
+            if other.time_since_update > HIDDEN_AGE:
+                continue
+            if _ltwh_iou(box, other.to_ltwh()) > CLEAN_IOU:
+                return False
+        return True
 
 
-def _box_iou(xyah_a, xyah_b) -> float:
-    """IoU of two boxes given as center-x, center-y, aspect, height."""
-    def to_ltrb(v):
-        cx, cy, a, h = (float(x) for x in v)
-        w = a * h
-        return cx - w / 2, cy - h / 2, cx + w / 2, cy + h / 2
-    ax1, ay1, ax2, ay2 = to_ltrb(xyah_a)
-    bx1, by1, bx2, by2 = to_ltrb(xyah_b)
-    ix1, iy1 = max(ax1, bx1), max(ay1, by1)
-    ix2, iy2 = min(ax2, bx2), min(ay2, by2)
-    iw, ih = max(0.0, ix2 - ix1), max(0.0, iy2 - iy1)
-    inter = iw * ih
-    if inter <= 0:
-        return 0.0
-    area_a = max(0.0, ax2 - ax1) * max(0.0, ay2 - ay1)
-    area_b = max(0.0, bx2 - bx1) * max(0.0, by2 - by1)
-    return inter / max(area_a + area_b - inter, 1e-6)
-
-
-def _steady(track) -> bool:
-    """True when the Kalman heading is reliable enough to refuse a sideways jump."""
-    if not track.is_confirmed() or track.hits < 5:
-        return False
-    vx, vy = float(track.mean[4]), float(track.mean[5])
-    return float(np.hypot(vx, vy)) >= MOTION_SPEED
+def _assign(cost, track_idx, det_idx):
+    """Cheapest one-to-one pairing of the given tracks and boxes."""
+    if not track_idx or not det_idx:
+        return []
+    sub = cost[np.ix_(track_idx, det_idx)]
+    rows, cols = linear_sum_assignment(sub)
+    return [(track_idx[r], det_idx[c]) for r, c in zip(rows, cols) if sub[r, c] < _INF]
 
 
 class Tracker:
     def __init__(self, max_age: int = MAX_AGE, n_init: int = N_INIT,
-                 max_iou_distance: float = MAX_IOU_DISTANCE,
-                 max_cosine_distance: float = MAX_COSINE_DISTANCE,
                  nn_budget: int | None = NN_BUDGET,
                  embedder_gpu: bool = False, half: bool = False, min_box: float = 4.0):
         self.min_box = min_box
         self.max_age = max_age
         self.n_init = n_init
-        self.max_iou_distance = max_iou_distance
-        self.max_cosine_distance = max_cosine_distance
         self.nn_budget = nn_budget
         self.embedder_gpu = embedder_gpu
         self.half = half
@@ -300,18 +425,13 @@ class Tracker:
 
     def reset(self):
         self.ds = DeepSort(
-            max_age=self.max_age, n_init=self.n_init,
-            max_iou_distance=self.max_iou_distance,
-            max_cosine_distance=self.max_cosine_distance,
-            nn_budget=self.nn_budget, gating_only_position=True,
+            max_age=self.max_age, n_init=self.n_init, nn_budget=self.nn_budget,
             embedder="mobilenet", half=self.half, bgr=True,
             embedder_gpu=self.embedder_gpu,
         )
         # DeepSort builds its own core tracker. Swap in the occlusion-aware one
-        # before any frames are seen; the metric (cosine threshold) stays.
-        self.ds.tracker = OcclusionAwareTracker(
-            self.ds.tracker.metric, self.max_iou_distance, self.max_age, self.n_init,
-        )
+        # before any frames are seen.
+        self.ds.tracker = OcclusionAwareTracker(self.ds.tracker.metric, self.max_age, self.n_init)
         self.total_time = 0.0
         self.frames = 0
         self.track_lengths: dict[int, int] = defaultdict(int)
@@ -329,7 +449,10 @@ class Tracker:
             if x2 - x1 < self.min_box or y2 - y1 < self.min_box:
                 continue
             raw.append(([x1, y1, x2 - x1, y2 - y1], float(s), int(l)))
-        tracks = self.ds.update_tracks(raw, frame=frame_bgr)
+        embeds = self.ds.generate_embeds(frame_bgr, raw) if raw else []
+        feats = [appearance_feature(e, color_descriptor(frame_bgr, r[0])) for e, r in zip(embeds, raw)]
+        self.ds.tracker.frame_size = (w, h)
+        tracks = self.ds.update_tracks(raw, embeds=feats)
         out = []
         frame_idx = self.frames
         for t in tracks:
