@@ -3,6 +3,8 @@
     "args": {
       "video": "data/vtest.avi",
       "modes": [
+        "full",
+        "lite",
         "cascade"
       ],
       "max_frames": 300,
@@ -36,11 +38,51 @@
   },
   "results": [
     {
+      "mode": "full",
+      "frames": 300,
+      "fps": 1.7596204189479678,
+      "ms_per_frame": 568.3043849865498,
+      "detect_ms": 65.93656666666666,
+      "full_calls": 300,
+      "full_call_rate": 1.0,
+      "reasons": {
+        "always": 300
+      },
+      "track_ms": 502.36277237694594,
+      "unique_ids": 11,
+      "mean_track_len": 160.8181818181818,
+      "short_tracks(<10f)": 0,
+      "recall_vs_full": 1.0,
+      "precision_vs_full": 1.0,
+      "f1_vs_full": 1.0,
+      "speedup_vs_full": 1.0
+    },
+    {
+      "mode": "lite",
+      "frames": 300,
+      "fps": 7.613039950247697,
+      "ms_per_frame": 131.3535731501664,
+      "detect_ms": 65.51776666666666,
+      "full_calls": 0,
+      "full_call_rate": 0.0,
+      "reasons": {
+        "never": 300
+      },
+      "track_ms": 65.83372142005828,
+      "unique_ids": 3,
+      "mean_track_len": 39.333333333333336,
+      "short_tracks(<10f)": 1,
+      "recall_vs_full": 0.021678321678321677,
+      "precision_vs_full": 0.3924050632911392,
+      "f1_vs_full": 0.04108681245858184,
+      "speedup_vs_full": 4.326523986803552
+    },
+    {
       "mode": "cascade",
       "frames": 300,
-      "fps": 1.5486042409826473,
-      "ms_per_frame": 645.7427750329953,
-      "detect_ms": 126.05686666666666,
+      "fps": 1.6862215002667063,
+      "ms_per_frame": 593.0418986128643,
+      "detect_ms": 121.609,
       "full_calls": 280,
       "full_call_rate": 0.9333333333333333,
       "reasons": {
@@ -49,10 +91,14 @@
         "lite": 20,
         "count_change": 2
       },
-      "track_ms": 519.6805397202357,
+      "track_ms": 471.42711680013844,
       "unique_ids": 11,
       "mean_track_len": 159.0,
-      "short_tracks(<10f)": 0
+      "short_tracks(<10f)": 0,
+      "recall_vs_full": 0.9412587412587412,
+      "precision_vs_full": 1.0,
+      "f1_vs_full": 0.9697406340057637,
+      "speedup_vs_full": 0.9582870726601679
     }
   ]
 }

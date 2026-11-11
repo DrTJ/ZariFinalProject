@@ -1,0 +1,58 @@
+{
+  "meta": {
+    "args": {
+      "video": "data/vtest.avi",
+      "modes": [
+        "cascade"
+      ],
+      "max_frames": 300,
+      "resize_width": null,
+      "classes": [
+        "person"
+      ],
+      "device": "auto",
+      "half": false,
+      "threads": null,
+      "no_pretrained": false,
+      "conf": 0.5,
+      "low": 0.3,
+      "high": 0.6,
+      "min_uncertain": 1,
+      "count_tolerance": 0,
+      "refresh_interval": 30,
+      "track": true,
+      "max_age": 120,
+      "n_init": 3,
+      "gt": null,
+      "out": "results",
+      "save_video": true,
+      "verbose": true
+    },
+    "device": "mps",
+    "frame_size": [
+      768,
+      576
+    ]
+  },
+  "results": [
+    {
+      "mode": "cascade",
+      "frames": 300,
+      "fps": 1.5486042409826473,
+      "ms_per_frame": 645.7427750329953,
+      "detect_ms": 126.05686666666666,
+      "full_calls": 280,
+      "full_call_rate": 0.9333333333333333,
+      "reasons": {
+        "first": 1,
+        "uncertain": 277,
+        "lite": 20,
+        "count_change": 2
+      },
+      "track_ms": 519.6805397202357,
+      "unique_ids": 11,
+      "mean_track_len": 159.0,
+      "short_tracks(<10f)": 0
+    }
+  ]
+}
