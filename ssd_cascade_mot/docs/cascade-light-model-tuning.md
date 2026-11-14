@@ -1,3 +1,21 @@
+<style>
+.markdown-body {
+  direction: rtl;
+  text-align: right;
+}
+.markdown-body pre {
+  direction: ltr;
+  unicode-bidi: isolate;
+  text-align: left;
+}
+.markdown-body code {
+  direction: ltr;
+  unicode-bidi: isolate;
+}
+</style>
+
+<div dir="rtl" lang="fa">
+
 # دفترچه گام‌به‌گام: تنظیم مدل سبک در آبشار
 
 این فایل هر گامی را که روی آبشار (مدل سبک SSDLite320 و مدل سنگین SSD300)، آستانه‌ها، آموزش مدل سبک و نمودار مقایسه برداشته می‌شود به ترتیب زمان ثبت می‌کند: چه چیزی بررسی شد، چه چیزی عوض شد، چه دستوری اجرا شد، چه عددی به دست آمد و چه نتیجه‌ای گرفته شد. کار تازه به انتهای همین فایل اضافه می‌شود.
@@ -32,9 +50,14 @@
 
 برای اینکه هر سه حالت و بازیابی در نمودار بیایند، باید هر سه حالت در یک اجرا باشند. این اجرا در گام ۸ انجام شد:
 
+<div dir="ltr">
+
 ```bash
 ./run.sh --video data/vtest.avi --classes person --modes full lite cascade --track --save-video
 ```
+
+</div>
+
 
 پیشنهاد کوچک برای کد، انجام‌نشده: `save_chart` قابی را که عددش در آن اجرا حساب نشده نکشد یا رویش بنویسد «حساب نشده»، تا صفر ساختگی دیده نشود.
 
@@ -69,10 +92,15 @@
 
 دستور:
 
+<div dir="ltr">
+
 ```bash
 cd ssd_cascade_mot
 .venv/bin/python tools/threshold_sweep.py
 ```
+
+</div>
+
 
 زمان‌ها در اجرای اول از `SSDDetector.mean_ms` خوانده شد:
 
@@ -91,6 +119,8 @@ cd ssd_cascade_mot
 - بخش ۵ اضافه شد. torchvision حذف جعبه‌های هم‌پوشان را روی همه جعبه‌های بالاتر از `score_thresh` خود مدل اجرا می‌کند. این مقدار برای SSDLite برابر ۰٫۰۰۱ و برای SSD300 برابر ۰٫۰۱ است. بخش ۵ این برش را بالا می‌برد، زمان را می‌گیرد، و می‌شمارد در چند فریم جعبه‌های با امتیاز ۰٫۳ و بالاتر با خروجی مدل پیش‌فرض یکی می‌ماند.
 
 دستور همان است. اجرا ۱۵۴ ثانیه طول کشید و با کد خروج صفر تمام شد. خروجی کامل:
+
+<div dir="ltr">
 
 ```text
 300 frames of 768x576 | device mps | classes ['person']
@@ -209,6 +239,9 @@ ssd300 on cpu
    0.300     100.7    60/60
 ```
 
+</div>
+
+
 ### گام ۵. خواندن عددها
 
 سرعت:
@@ -243,11 +276,16 @@ ssd300 on cpu
 
 بررسی:
 
+<div dir="ltr">
+
 ```bash
 rg --files -g '*train*' -g '!.venv/**' -g '!python/**' .
 rg -n -i 'fine-?tun|train' README.md cascade_mot tests tools
 ls data
 ```
+
+</div>
+
 
 - بیرون از پوشه‌های محیط پایتون هیچ فایل آموزشی در پروژه نیست.
 - `data/` فقط `vtest.avi` را دارد. فایل برچسب یا حاشیه‌نویسی در پروژه نیست.
@@ -277,9 +315,14 @@ ls data
 
 آستانه‌ها همان پیش‌فرض‌اند (`conf` ۰٫۵، `low` ۰٫۳، `high` ۰٫۶، `min_uncertain` ۱، `count_tolerance` صفر). کد عوض نشد.
 
+<div dir="ltr">
+
 ```bash
 ./run.sh --video data/vtest.avi --classes person --modes full lite cascade --track --save-video --verbose
 ```
+
+</div>
+
 
 اجرا ۳۹۸ ثانیه طول کشید و با کد خروج صفر تمام شد. پوشه `results/` بازنویسی شد. نسخه قبلی آن (اجرای ساعت ۰۱:۴۶) بایت‌به‌بایت در `results 03/` هست.
 
@@ -327,11 +370,16 @@ ls data
 
 1. ویدیو و کلاس را مشخص کنید و ابزار را اجرا کنید:
 
-   ```bat
-   .venv-windows\Scripts\python.exe tools\threshold_sweep.py --video <ویدیو> --classes <کلاس> --max-frames 300
-   ```
+<div dir="ltr">
 
-   برای جفت مدل دیگر، نام‌های `"ssdlite"` و `"ssd300"` در همان فایل عوض می‌شوند. مدل تازه باید اول به `MODELS` در `cascade_mot/detectors.py` اضافه شده باشد.
+```bat
+.venv-windows\Scripts\python.exe tools\threshold_sweep.py --video <ویدیو> --classes <کلاس> --max-frames 300
+```
+
+</div>
+
+برای جفت مدل دیگر، نام‌های `"ssdlite"` و `"ssd300"` در همان فایل عوض می‌شوند. مدل تازه باید اول به `MODELS` در `cascade_mot/detectors.py` اضافه شده باشد.
+
 2. جدول ۱: آیا مدل سبک واقعاً ارزان‌تر است؟ اگر نه، همین‌جا بایستید و مدل یا سخت‌افزار را عوض کنید.
 3. جدول ۲ و ۳: امتیازهای مدل سبک کجا می‌افتند و در چه آستانه‌ای بازیابی و دقتش قابل قبول است. اگر در هیچ آستانه‌ای نیست، مدل سبک برای این شیء آموزش لازم دارد.
 4. جدول ۴: برای کف بازیابی‌ای که می‌خواهید، ردیف با کمترین سهم مدل سنگین را بردارید.
@@ -345,3 +393,5 @@ ls data
 - `results/` در گام ۸ با اجرای هر سه حالت بازنویسی شد. نسخه قبلی در `results 03/` است.
 - `README.md` و `docs/گزارش-رفع-جابجایی-شناسه.md` در گام ۹ به‌روز شدند.
 - در `cascade_mot/`، آستانه‌های پیش‌فرض و وزن مدل‌ها چیزی عوض نشده است.
+
+</div>
